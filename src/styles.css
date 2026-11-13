@@ -48,6 +48,10 @@ button {
   --bg-canvas: #08080a;
   --bg-panel: rgba(10, 10, 12, 0.96);
   --bg-hud: rgba(8, 8, 10, 0.96);
+  --surface-panel: #0a0a0c;
+  --surface-hud: #08080a;
+  --surface-card: #141416;
+  --surface-card-hover: #1e1e1f;
   --bg-card: rgba(255, 255, 255, 0.04);
   --bg-card-hover: rgba(255, 255, 255, 0.08);
   --bg-selected: rgba(255, 255, 255, 0.12);
@@ -74,6 +78,10 @@ button {
   --bg-canvas: #181825;
   --bg-panel: rgba(30, 30, 46, 0.97);
   --bg-hud: rgba(24, 24, 37, 0.97);
+  --surface-panel: #1e1e2e;
+  --surface-hud: #181825;
+  --surface-card: #272839;
+  --surface-card-hover: #2d2e3f;
   --bg-card: rgba(49, 50, 68, 0.48);
   --bg-card-hover: rgba(49, 50, 68, 0.78);
   --bg-selected: rgba(203, 166, 247, 0.16);
@@ -97,6 +105,10 @@ button {
   --bg-canvas: #191724;
   --bg-panel: rgba(31, 29, 46, 0.97);
   --bg-hud: rgba(25, 23, 36, 0.97);
+  --surface-panel: #1f1d2e;
+  --surface-hud: #191724;
+  --surface-card: #232035;
+  --surface-card-hover: #252239;
   --bg-card: rgba(38, 35, 58, 0.58);
   --bg-card-hover: rgba(38, 35, 58, 0.88);
   --bg-selected: rgba(235, 188, 186, 0.16);
@@ -120,6 +132,10 @@ button {
   --bg-canvas: #13141c;
   --bg-panel: rgba(26, 27, 38, 0.97);
   --bg-hud: rgba(19, 20, 28, 0.97);
+  --surface-panel: #1a1b26;
+  --surface-hud: #13141c;
+  --surface-card: #202332;
+  --surface-card-hover: #232638;
   --bg-card: rgba(36, 40, 59, 0.58);
   --bg-card-hover: rgba(36, 40, 59, 0.88);
   --bg-selected: rgba(122, 162, 247, 0.17);
@@ -143,6 +159,10 @@ button {
   --bg-canvas: #2e3440;
   --bg-panel: rgba(59, 66, 82, 0.97);
   --bg-hud: rgba(46, 52, 64, 0.97);
+  --surface-panel: #3b4252;
+  --surface-hud: #2e3440;
+  --surface-card: #333a48;
+  --surface-card-hover: #303642;
   --bg-card: rgba(46, 52, 64, 0.58);
   --bg-card-hover: rgba(46, 52, 64, 0.88);
   --bg-selected: rgba(136, 192, 208, 0.17);
@@ -166,6 +186,10 @@ button {
   --bg-canvas: #1d2021;
   --bg-panel: rgba(40, 40, 40, 0.97);
   --bg-hud: rgba(29, 32, 33, 0.97);
+  --surface-panel: #282828;
+  --surface-hud: #1d2021;
+  --surface-card: #343130;
+  --surface-card-hover: #3a3634;
   --bg-card: rgba(60, 56, 54, 0.58);
   --bg-card-hover: rgba(60, 56, 54, 0.88);
   --bg-selected: rgba(254, 128, 25, 0.17);
@@ -186,6 +210,10 @@ button {
 
 [data-theme="catppuccin-latte"] {
   --bg-canvas: #eff1f5; --bg-panel: rgba(239, 241, 245, 0.97); --bg-hud: rgba(230, 233, 239, 0.97);
+  --surface-panel: #eff1f5;
+  --surface-hud: #e6e9ef;
+  --surface-card: #dbdee5;
+  --surface-card-hover: #d0d4dd;
   --bg-card: rgba(204, 208, 218, 0.58); --bg-card-hover: rgba(204, 208, 218, 0.88); --bg-selected: rgba(136, 57, 239, 0.14);
   --border-panel: rgba(136, 57, 239, 0.24); --border-card: rgba(172, 176, 190, 0.7); --border-selected: rgba(136, 57, 239, 0.45);
   --accent-primary: #8839ef; --accent-glow: rgba(136, 57, 239, 0.22); --text-primary: #4c4f69; --text-secondary: #5c5f77; --text-muted: #6c6f85;
@@ -193,37 +221,67 @@ button {
 }
 
 [data-theme="catppuccin-frappe"] {
-  --bg-canvas: #232634; --bg-panel: rgba(48, 52, 70, 0.97); --bg-hud: rgba(35, 38, 52, 0.97); --bg-card: rgba(65, 69, 89, 0.58); --bg-card-hover: rgba(65, 69, 89, 0.88); --bg-selected: rgba(202, 158, 230, 0.16);
+  --bg-canvas: #232634; --bg-panel: rgba(48, 52, 70, 0.97); --bg-hud: rgba(35, 38, 52, 0.97);
+  --surface-panel: #303446;
+  --surface-hud: #232634;
+  --surface-card: #3a3e51;
+  --surface-card-hover: #3f4357;
+  --bg-card: rgba(65, 69, 89, 0.58); --bg-card-hover: rgba(65, 69, 89, 0.88); --bg-selected: rgba(202, 158, 230, 0.16);
   --border-panel: rgba(202, 158, 230, 0.24); --border-card: rgba(81, 87, 109, 0.75); --border-selected: rgba(202, 158, 230, 0.45); --accent-primary: #ca9ee6; --accent-glow: rgba(202, 158, 230, 0.25);
   --text-primary: #c6d0f5; --text-secondary: #b5bfe2; --text-muted: #a5adce; --kbd-bg: rgba(65, 69, 89, 0.85); --kbd-border: rgba(81, 87, 109, 0.8); --kbd-text: #c6d0f5; --divider: rgba(81, 87, 109, 0.55); --popup-bg: #232634;
 }
 
 [data-theme="catppuccin-macchiato"] {
-  --bg-canvas: #181926; --bg-panel: rgba(36, 39, 58, 0.97); --bg-hud: rgba(24, 25, 38, 0.97); --bg-card: rgba(54, 58, 79, 0.58); --bg-card-hover: rgba(54, 58, 79, 0.88); --bg-selected: rgba(198, 160, 246, 0.16);
+  --bg-canvas: #181926; --bg-panel: rgba(36, 39, 58, 0.97); --bg-hud: rgba(24, 25, 38, 0.97);
+  --surface-panel: #24273a;
+  --surface-hud: #181926;
+  --surface-card: #2e3246;
+  --surface-card-hover: #34384c;
+  --bg-card: rgba(54, 58, 79, 0.58); --bg-card-hover: rgba(54, 58, 79, 0.88); --bg-selected: rgba(198, 160, 246, 0.16);
   --border-panel: rgba(198, 160, 246, 0.24); --border-card: rgba(73, 77, 100, 0.75); --border-selected: rgba(198, 160, 246, 0.45); --accent-primary: #c6a0f6; --accent-glow: rgba(198, 160, 246, 0.25);
   --text-primary: #cad3f5; --text-secondary: #b8c0e0; --text-muted: #a5adcb; --kbd-bg: rgba(54, 58, 79, 0.85); --kbd-border: rgba(73, 77, 100, 0.8); --kbd-text: #cad3f5; --divider: rgba(73, 77, 100, 0.55); --popup-bg: #181926;
 }
 
 [data-theme="rose-pine-dawn"] {
-  --bg-canvas: #faf4ed; --bg-panel: rgba(255, 250, 243, 0.97); --bg-hud: rgba(250, 244, 237, 0.97); --bg-card: rgba(242, 233, 225, 0.72); --bg-card-hover: rgba(223, 218, 217, 0.9); --bg-selected: rgba(215, 130, 126, 0.16);
+  --bg-canvas: #faf4ed; --bg-panel: rgba(255, 250, 243, 0.97); --bg-hud: rgba(250, 244, 237, 0.97);
+  --surface-panel: #fffaf3;
+  --surface-hud: #faf4ed;
+  --surface-card: #f6eee6;
+  --surface-card-hover: #f3ebe3;
+  --bg-card: rgba(242, 233, 225, 0.72); --bg-card-hover: rgba(223, 218, 217, 0.9); --bg-selected: rgba(215, 130, 126, 0.16);
   --border-panel: rgba(144, 122, 169, 0.3); --border-card: rgba(206, 202, 205, 0.8); --border-selected: rgba(215, 130, 126, 0.5); --accent-primary: #d7827e; --accent-glow: rgba(215, 130, 126, 0.25);
   --text-primary: #575279; --text-secondary: #797593; --text-muted: #9893a5; --kbd-bg: rgba(242, 233, 225, 0.9); --kbd-border: rgba(206, 202, 205, 0.85); --kbd-text: #575279; --divider: rgba(206, 202, 205, 0.7); --popup-bg: #faf4ed;
 }
 
 [data-theme="rose-pine-moon"] {
-  --bg-canvas: #232136; --bg-panel: rgba(42, 39, 63, 0.97); --bg-hud: rgba(35, 33, 54, 0.97); --bg-card: rgba(57, 53, 82, 0.58); --bg-card-hover: rgba(57, 53, 82, 0.88); --bg-selected: rgba(234, 154, 151, 0.16);
+  --bg-canvas: #232136; --bg-panel: rgba(42, 39, 63, 0.97); --bg-hud: rgba(35, 33, 54, 0.97);
+  --surface-panel: #2a273f;
+  --surface-hud: #232136;
+  --surface-card: #332f4a;
+  --surface-card-hover: #373350;
+  --bg-card: rgba(57, 53, 82, 0.58); --bg-card-hover: rgba(57, 53, 82, 0.88); --bg-selected: rgba(234, 154, 151, 0.16);
   --border-panel: rgba(234, 154, 151, 0.24); --border-card: rgba(68, 65, 90, 0.75); --border-selected: rgba(234, 154, 151, 0.45); --accent-primary: #ea9a97; --accent-glow: rgba(234, 154, 151, 0.25);
   --text-primary: #e0def4; --text-secondary: #908caa; --text-muted: #6e6a86; --kbd-bg: rgba(57, 53, 82, 0.85); --kbd-border: rgba(68, 65, 90, 0.8); --kbd-text: #e0def4; --divider: rgba(68, 65, 90, 0.55); --popup-bg: #232136;
 }
 
 [data-theme="vesper"] {
-  --bg-canvas: #101010; --bg-panel: rgba(22, 22, 22, 0.97); --bg-hud: rgba(16, 16, 16, 0.97); --bg-card: rgba(40, 40, 40, 0.62); --bg-card-hover: rgba(52, 52, 52, 0.9); --bg-selected: rgba(255, 199, 153, 0.16);
+  --bg-canvas: #101010; --bg-panel: rgba(22, 22, 22, 0.97); --bg-hud: rgba(16, 16, 16, 0.97);
+  --surface-panel: #161616;
+  --surface-hud: #101010;
+  --surface-card: #212121;
+  --surface-card-hover: #262626;
+  --bg-card: rgba(40, 40, 40, 0.62); --bg-card-hover: rgba(52, 52, 52, 0.9); --bg-selected: rgba(255, 199, 153, 0.16);
   --border-panel: rgba(255, 199, 153, 0.25); --border-card: rgba(80, 80, 80, 0.7); --border-selected: rgba(255, 199, 153, 0.48); --accent-primary: #ffc799; --accent-glow: rgba(255, 199, 153, 0.25);
   --text-primary: #ffffff; --text-secondary: #a0a0a0; --text-muted: #7e7e7e; --kbd-bg: rgba(52, 52, 52, 0.85); --kbd-border: rgba(80, 80, 80, 0.85); --kbd-text: #ffffff; --divider: rgba(80, 80, 80, 0.6); --popup-bg: #101010;
 }
 
 [data-theme="gruvbox-light"] {
-  --bg-canvas: #fbf1c7; --bg-panel: rgba(251, 241, 199, 0.97); --bg-hud: rgba(249, 245, 215, 0.97); --bg-card: rgba(235, 219, 178, 0.7); --bg-card-hover: rgba(213, 196, 161, 0.9); --bg-selected: rgba(175, 58, 3, 0.14);
+  --bg-canvas: #fbf1c7; --bg-panel: rgba(251, 241, 199, 0.97); --bg-hud: rgba(249, 245, 215, 0.97);
+  --surface-panel: #fbf1c7;
+  --surface-hud: #f9f5d7;
+  --surface-card: #f0e2b8;
+  --surface-card-hover: #edddb4;
+  --bg-card: rgba(235, 219, 178, 0.7); --bg-card-hover: rgba(213, 196, 161, 0.9); --bg-selected: rgba(175, 58, 3, 0.14);
   --border-panel: rgba(175, 58, 3, 0.25); --border-card: rgba(168, 153, 132, 0.7); --border-selected: rgba(175, 58, 3, 0.5); --accent-primary: #af3a03; --accent-glow: rgba(175, 58, 3, 0.22);
   --text-primary: #3c3836; --text-secondary: #504945; --text-muted: #7c6f64; --kbd-bg: rgba(235, 219, 178, 0.85); --kbd-border: rgba(168, 153, 132, 0.8); --kbd-text: #3c3836; --divider: rgba(168, 153, 132, 0.6); --popup-bg: #fbf1c7;
 }
@@ -232,6 +290,10 @@ button {
     --bg-canvas: #f8f8fa;
     --bg-panel: rgba(255, 255, 255, 0.97);
     --bg-hud: rgba(248, 248, 250, 0.97);
+    --surface-panel: #ffffff;
+    --surface-hud: #f8f8fa;
+    --surface-card: #f7f7f7;
+    --surface-card-hover: #f0f0f0;
     --bg-card: rgba(0, 0, 0, 0.03);
     --bg-card-hover: rgba(0, 0, 0, 0.06);
     --bg-selected: rgba(0, 122, 255, 0.1);
@@ -275,6 +337,14 @@ button {
   padding: 0;
   background: rgba(0, 0, 0, 0.12);
   pointer-events: auto;
+  /* Overridden inline per overlay from settings; these are the fallbacks. */
+  --surface-alpha: 1;
+  --surface-blur: 40px;
+  /* Surfaces fade with the slider; text, icons, borders and highlights do not. */
+  --surface-panel-fill: color-mix(in srgb, var(--surface-panel) calc(var(--surface-alpha) * 100%), transparent);
+  --surface-hud-fill: color-mix(in srgb, var(--surface-hud) calc(var(--surface-alpha) * 100%), transparent);
+  --surface-card-fill: color-mix(in srgb, var(--surface-card) calc(var(--surface-alpha) * 100%), transparent);
+  --surface-card-hover-fill: color-mix(in srgb, var(--surface-card-hover) calc(var(--surface-alpha) * 100%), transparent);
 }
 
 .palette-backdrop.switcher-backdrop {
@@ -334,7 +404,7 @@ button {
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--text-secondary);
-  background: var(--bg-card);
+  background: var(--surface-card-fill);
   border: 1px solid var(--border-card);
   cursor: pointer;
   user-select: none;
@@ -348,7 +418,7 @@ button {
 
 .bookmark-scope-pill:hover {
   color: var(--text-primary);
-  background: var(--bg-card-hover);
+  background: var(--surface-card-hover-fill);
   border-color: var(--border-panel);
 }
 
@@ -726,10 +796,9 @@ button {
   position: relative;
   width: fit-content;
   max-width: min(94vw, 1180px);
-  background-color: rgb(from var(--bg-hud) r g b / 86%);
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 42%);
-  backdrop-filter: blur(40px) saturate(1.6);
-  -webkit-backdrop-filter: blur(40px) saturate(1.6);
+  background-color: var(--surface-hud-fill);
+  background-image: linear-gradient(180deg, color-mix(in srgb, #ffffff calc(var(--surface-alpha) * 8%), transparent), transparent 42%);
+  backdrop-filter: blur(var(--surface-blur));
   border: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
   border-radius: 30px;
   box-shadow:
@@ -811,7 +880,7 @@ button {
 .switcher-card.is-selected .switcher-plate {
   opacity: 1;
   transform: translateY(-3px) scale(1.012);
-  background: color-mix(in srgb, var(--bg-panel) 84%, transparent);
+  background: var(--surface-panel-fill);
   box-shadow:
     0 18px 36px -18px rgba(0, 0, 0, 0.45),
     inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 12%, transparent);
@@ -823,7 +892,7 @@ button {
   height: 132px;
   border-radius: 12px;
   overflow: hidden;
-  background: var(--bg-canvas);
+  background: var(--surface-panel-fill);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
@@ -843,7 +912,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: var(--bg-card);
+  background: var(--surface-card-fill);
   color: var(--text-secondary);
 }
 
@@ -893,10 +962,9 @@ button {
   z-index: 2;
   transform: translateX(-50%);
   width: min(calc(100vw - 32px), 700px);
-  background-color: rgb(from var(--bg-panel) r g b / 84%);
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 40%);
-  backdrop-filter: blur(40px) saturate(1.6);
-  -webkit-backdrop-filter: blur(40px) saturate(1.6);
+  background-color: var(--surface-panel-fill);
+  background-image: linear-gradient(180deg, color-mix(in srgb, #ffffff calc(var(--surface-alpha) * 8%), transparent), transparent 40%);
+  backdrop-filter: blur(var(--surface-blur));
   border: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
   border-radius: 22px;
   box-shadow:
@@ -908,6 +976,14 @@ button {
   transform-origin: top center;
   will-change: transform, opacity;
   transition: width 180ms ease;
+}
+
+/* When the panel surface is mostly transparent the page shows through the
+   text, so a soft halo fades in below 35% background opacity. One rule only:
+   text, borders and highlights stay otherwise untouched. */
+.palette-card,
+.switcher-hud {
+  text-shadow: 0 1px 2px color-mix(in srgb, #000000 max(0%, (0.35 - var(--surface-alpha)) * 150%), transparent);
 }
 
 .palette-card.is-expanded {
@@ -1297,7 +1373,7 @@ button {
   flex-direction: column;
   padding: 10px;
   border-radius: 14px;
-  background: var(--bg-card);
+  background: var(--surface-card-fill);
   border: 1px solid var(--border-card);
   box-shadow: none;
   cursor: pointer;
@@ -1309,7 +1385,7 @@ button {
 }
 
 .gallery-card:hover {
-  background: var(--bg-card-hover);
+  background: var(--surface-card-hover-fill);
   border-color: var(--border-selected);
   transform: translateY(-2px);
   box-shadow: none;
@@ -1332,7 +1408,7 @@ button {
   aspect-ratio: 16 / 10;
   border-radius: 10px;
   overflow: hidden;
-  background: var(--bg-canvas);
+  background: var(--surface-panel-fill);
   border: 1px solid var(--border-card);
   box-shadow: none;
 }
@@ -1353,7 +1429,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: var(--bg-card);
+  background: var(--surface-card-fill);
 }
 
 .gallery-placeholder-domain {
@@ -1418,7 +1494,7 @@ button {
 }
 
 .fallback-favicon {
-  background: var(--bg-card-hover);
+  background: var(--surface-card-hover-fill);
   color: var(--text-muted);
 }
 
@@ -1470,7 +1546,7 @@ button {
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid var(--divider);
-  background: var(--bg-card);
+  background: var(--surface-card-fill);
   color: var(--text-muted);
   font-size: 11px;
 }
@@ -1670,6 +1746,12 @@ kbd {
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+.popup-range-row.is-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
 }
 
 .popup-segmented {
@@ -1981,7 +2063,7 @@ kbd {
   }
 
   .palette-backdrop[data-scheme="light"][data-theme="default"] .gallery-card {
-    background: var(--bg-card);
+    background: var(--surface-card-fill);
     border-color: var(--border-card);
     box-shadow: none;
   }
@@ -1995,7 +2077,7 @@ kbd {
   }
 
   .palette-backdrop[data-scheme="light"][data-theme="default"] .gallery-card:hover {
-    background: var(--bg-card-hover);
+    background: var(--surface-card-hover-fill);
     border-color: var(--border-selected);
     box-shadow: none;
   }
@@ -2017,7 +2099,7 @@ kbd {
 
   .palette-backdrop[data-scheme="light"][data-theme="default"] .list-row:hover,
   .palette-backdrop[data-scheme="light"][data-theme="default"] .gallery-card:hover {
-    background-color: var(--bg-card-hover);
+    background-color: var(--surface-card-hover-fill);
   }
 
   .palette-backdrop[data-scheme="light"][data-theme="default"] .list-row.selected {
@@ -2039,17 +2121,6 @@ kbd {
 .palette-backdrop[data-scheme="light"][data-theme="default"] .clear-icon-btn:hover,
 .palette-backdrop[data-scheme="light"][data-theme="default"] .expand-toggle-btn:hover {
   color: var(--text-primary);
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .palette-card,
-  .bookmark-card,
-  .switcher-hud {
-    background-color: var(--bg-panel);
-    background-image: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

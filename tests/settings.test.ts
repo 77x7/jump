@@ -43,6 +43,27 @@ function installChromeStorage(
   });
 }
 
+test("opacity and blur parse and clamp into their ranges", () => {
+  // Opacity is now a 0..1 background alpha; 0 means fully see-through.
+  assert.equal(parseStoredSettings({ paletteOpacity: 0 }).paletteOpacity, 0);
+  assert.equal(parseStoredSettings({ paletteOpacity: -1 }).paletteOpacity, 0);
+  assert.equal(parseStoredSettings({ paletteOpacity: 0.4 }).paletteOpacity, 0.4);
+  assert.equal(parseStoredSettings({ paletteOpacity: 0.65 }).paletteOpacity, 0.65);
+  assert.equal(parseStoredSettings({ paletteOpacity: 2 }).paletteOpacity, 1);
+  // Non-numbers fall back to the defaults instead of being coerced.
+  assert.equal(parseStoredSettings({ paletteOpacity: "0.5" }).paletteOpacity, DEFAULT_SETTINGS.paletteOpacity);
+  assert.equal(parseStoredSettings({ paletteOpacity: Number.NaN }).paletteOpacity, DEFAULT_SETTINGS.paletteOpacity);
+
+  assert.equal(DEFAULT_SETTINGS.paletteBlur, 40);
+  assert.equal(parseStoredSettings({}).paletteBlur, 40);
+  assert.equal(parseStoredSettings({ paletteBlur: 0 }).paletteBlur, 0);
+  assert.equal(parseStoredSettings({ paletteBlur: 16 }).paletteBlur, 16);
+  assert.equal(parseStoredSettings({ paletteBlur: 41 }).paletteBlur, 40);
+  assert.equal(parseStoredSettings({ paletteBlur: -8 }).paletteBlur, 0);
+  assert.equal(parseStoredSettings({ paletteBlur: "16" }).paletteBlur, DEFAULT_SETTINGS.paletteBlur);
+  assert.equal(parseStoredSettings({ paletteBlur: Number.NaN }).paletteBlur, DEFAULT_SETTINGS.paletteBlur);
+});
+
 test("a pending popup read does not replace a newer user selection", () => {
   const userSelection = { ...DEFAULT_SETTINGS, viewMode: "gallery" as const };
   const resolved = resolveSettingsRead(

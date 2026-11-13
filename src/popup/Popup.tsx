@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { openShortcutSettings } from "../browser";
 import { CommandIcon, ArrowUpRightIcon, InfoIcon } from "../icons";
-import { DEFAULT_SETTINGS, getStoredSettings, saveStoredSettings, themeForScheme, themesForScheme, type ThemeInfo } from "../settings";
+import { DEFAULT_SETTINGS, MAX_PALETTE_BLUR, getStoredSettings, saveStoredSettings, themeForScheme, themesForScheme, type ThemeInfo } from "../settings";
 import type { ColorScheme, PaletteViewMode, TabSwitchMode, UserSettings } from "../types";
 import { resolveSettingsRead } from "./settingsState";
 import { useMountEffect } from "../hooks/useMountEffect";
@@ -181,20 +181,40 @@ export function Popup() {
       <section className="popup-section" aria-labelledby="opacity-label">
         <div className="popup-section-heading">
           <span id="opacity-label">Opacity</span>
-          <span className="popup-section-context">All overlays</span>
+          <span className="popup-section-context">Panel background</span>
         </div>
         <label className="popup-range-row">
-          <span className="sr-only">Overlay opacity</span>
+          <span className="sr-only">Panel background opacity</span>
           <input
             className="popup-range"
             type="range"
-            min="0.4"
+            min="0"
             max="1"
-            step="0.05"
+            step="0.01"
             value={settings.paletteOpacity}
             onChange={(event) => void updateSetting("paletteOpacity", Number(event.target.value))}
           />
           <output>{Math.round(settings.paletteOpacity * 100)}%</output>
+        </label>
+      </section>
+
+      <section className="popup-section" aria-labelledby="blur-label">
+        <div className="popup-section-heading">
+          <span id="blur-label">Blur</span>
+          <span className="popup-section-context">Panel background</span>
+        </div>
+        <label className="popup-range-row is-stacked">
+          <span className="sr-only">Panel background blur in pixels</span>
+          <input
+            className="popup-range"
+            type="range"
+            min="0"
+            max={MAX_PALETTE_BLUR}
+            step="1"
+            value={settings.paletteBlur}
+            onChange={(event) => void updateSetting("paletteBlur", Number(event.target.value))}
+          />
+          <output>{Math.round(settings.paletteBlur)} px</output>
         </label>
       </section>
 

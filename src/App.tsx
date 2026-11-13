@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { activateTab, getBrowserHistory, getTabPreviews, getTabs, notifyPaletteClosed, notifyPaletteOpened, openUrl, searchWeb, setTabMuted, setTabPinned, type BrowserHistoryItem } from "./browser";
 import { ArrowRightIcon, CornerDownLeftIcon, PinIcon, XIcon } from "./icons";
 import { PaletteAction } from "./PaletteAction";
@@ -750,12 +750,20 @@ export function App({
     cancelPaletteDragAt(event.pointerId);
   };
 
+  // Surfaces (panel, HUD, cards) read these custom properties so only their
+  // backgrounds fade; text, icons, borders and highlights stay fully opaque.
+  const surfaceStyle = {
+    "--surface-alpha": settings.paletteOpacity,
+    "--surface-blur": `${settings.paletteBlur}px`,
+  } as CSSProperties;
+
   if (isBookmarks) {
     return (
       <BookmarkManager
         theme={settings.theme}
         colorScheme={settings.colorScheme}
-        opacity={settings.paletteOpacity}
+        surfaceAlpha={settings.paletteOpacity}
+        surfaceBlur={settings.paletteBlur}
         disableMouse={settings.disableMouseBookmarks}
         position={visiblePalettePosition}
         isClosing={isClosing}
@@ -771,6 +779,7 @@ export function App({
         className={`palette-backdrop switcher-backdrop ${isClosing ? "is-closing" : ""}`}
         data-theme={settings.theme}
         data-scheme={settings.colorScheme}
+        style={surfaceStyle}
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) handleClose();
         }}
@@ -781,7 +790,6 @@ export function App({
           aria-label="Tab Switcher"
           tabIndex={-1}
           ref={switcherRef}
-          style={{ opacity: settings.paletteOpacity }}
         >
           <div
             className={`switcher-track ${tabs.length <= 3 ? "is-centered" : ""}`}
@@ -817,6 +825,7 @@ export function App({
       className={`palette-backdrop ${isClosing ? "is-closing" : ""}`}
       data-theme={settings.theme}
       data-scheme={settings.colorScheme}
+      style={surfaceStyle}
       onMouseDown={(event) => {
         if (event.altKey) return;
         if (event.target === event.currentTarget) handleClose();
@@ -835,7 +844,7 @@ export function App({
       <div
         ref={paletteCardRef}
         className={`palette-card ${showDropdown ? "is-expanded" : ""} ${isGallery && showDropdown ? "is-gallery-view" : ""} ${isClosing ? "is-closing" : ""} ${isPaletteDragReady ? "is-drag-ready" : ""} ${isDraggingPalette ? "is-dragging" : ""}`}
-        style={{ left: `${visiblePalettePosition.x * 100}%`, top: `${visiblePalettePosition.y * 100}%`, opacity: settings.paletteOpacity }}
+        style={{ left: `${visiblePalettePosition.x * 100}%`, top: `${visiblePalettePosition.y * 100}%` }}
         role="dialog"
         aria-modal="true"
         onPointerDown={handlePalettePointerDown}

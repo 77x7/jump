@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getBookmarks, openBookmark } from "../browser";
 import { BookmarkIcon, ChevronDownIcon, ChevronLeftIcon, CornerDownLeftIcon, GlobeIcon } from "../icons";
 import { activeElementIn, useEventRoot } from "../eventRoot";
@@ -116,7 +116,8 @@ function BookmarkDetail({
 export function BookmarkManager({
   theme,
   colorScheme = "dark",
-  opacity = 1,
+  surfaceAlpha = 1,
+  surfaceBlur = 0,
   disableMouse = false,
   position = { x: 0.5, y: 0.28 },
   isClosing = false,
@@ -124,7 +125,8 @@ export function BookmarkManager({
 }: {
   theme: ColorTheme;
   colorScheme?: ColorScheme;
-  opacity?: number;
+  surfaceAlpha?: number;
+  surfaceBlur?: number;
   disableMouse?: boolean;
   position?: PalettePosition;
   isClosing?: boolean;
@@ -561,6 +563,10 @@ export function BookmarkManager({
       className={`palette-backdrop ${isClosing ? "is-closing" : ""}`}
       data-theme={theme}
       data-scheme={colorScheme}
+      style={{
+        "--surface-alpha": surfaceAlpha,
+        "--surface-blur": `${surfaceBlur}px`,
+      } as CSSProperties}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -580,7 +586,6 @@ export function BookmarkManager({
         style={{
           left: `${(dragPosition ?? position).x * 100}%`,
           top: `${(dragPosition ?? position).y * 100}%`,
-          opacity,
         }}
         ref={cardRef}
         role="dialog"
