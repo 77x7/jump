@@ -7,7 +7,7 @@ import { buildSearchResults, type SearchResult } from "./paletteSearch";
 import { stalePreviewTabIds } from "./previewCache";
 import { getSearchHistory, recordSearch, type SearchHistoryEntry } from "./searchHistory";
 import { DEFAULT_SETTINGS, getStoredSettings, pinnedTabIdentity, saveStoredSettings, subscribeToSettings } from "./settings";
-import { SWITCHER_ITEM_PITCH, SWITCHER_OVERSCAN, SWITCHER_TRACK_GAP, switcherWindow } from "./switcherWindow";
+import { SWITCHER_ITEM_PITCH, SWITCHER_OVERSCAN, SWITCHER_TRACK_GAP, switcherWindow, switcherWindowKey } from "./switcherWindow";
 import { useResolvedAppearance } from "./appearance";
 import { useEventRoot } from "./eventRoot";
 import { useMountEffect } from "./hooks/useMountEffect";
@@ -622,7 +622,7 @@ export function App({
         itemWidth: switcherPitch,
         overscan: SWITCHER_OVERSCAN,
       })
-      : { start: 0, end: 0 },
+      : [],
     [activeIndex, isSwitcher, switcherPitch, switcherScroll, tabs.length],
   );
   const switcherRangeRef = useRef(switcherRange);
@@ -692,8 +692,7 @@ export function App({
         itemWidth: pitch,
         overscan: SWITCHER_OVERSCAN,
       });
-      const current = switcherRangeRef.current;
-      if (next.start === current.start && next.end === current.end) return;
+      if (switcherWindowKey(next) === switcherWindowKey(switcherRangeRef.current)) return;
       setSwitcherScroll({ left: track.scrollLeft, width: track.clientWidth });
     };
     track.addEventListener("scroll", handleScroll, { passive: true });
@@ -982,7 +981,6 @@ export function App({
 
   // Visual Horizontal Switcher Mode (Alt + Q)
   if (isSwitcher) {
-    const { start, end } = switcherRange;
     const spacerWidth = (cards: number) => `${cards * switcherPitch - switcherGap}px`;
     return (
       <div
@@ -1012,27 +1010,32 @@ export function App({
               </div>
             ) : (
               <>
-                {start > 0 && (
-                  <div className="switcher-spacer" aria-hidden="true" style={{ width: spacerWidth(start) }} />
-                )}
-                {tabs.slice(start, end).map((tab, offset) => {
-                  const index = start + offset;
-                  return (
-                    <SwitcherCard
-                      key={`switcher-${tab.windowId}-${tab.id}`}
-                      tab={tab}
-                      index={index}
-                      isSelected={index === activeIndex}
-                      setSize={tabs.length}
-                      previewUrl={previewUrls[String(tab.id)]}
-                      onClick={settings.disableMouseTabSwitcher ? undefined : () => void switchTab(tab)}
-                      onMouseEnter={settings.disableMouseTabSwitcher ? undefined : () => setSelectedIndex(index)}
-                      onToggleMute={settings.disableMouseTabSwitcher ? undefined : () => void muteTab(tab)}
-                    />
-                  );
+                {switcherRange.flatMap((range, rangeIndex) => {
+                  const gapBefore = range.start - (rangeIndex === 0 ? 0 : switcherRange[rangeIndex - 1].end);
+                  return [
+                    ...(gapBefore > 0
+                      ? [<div key={`spacer-${range.start}`} className="switcher-spacer" aria-hidden="true" style={{ width: spacerWidth(gapBefore) }} />]
+                      : []),
+                    ...tabs.slice(range.start, range.end).map((tab, offset) => {
+                      const index = range.start + offset;
+                      return (
+                        <SwitcherCard
+                          key={`switcher-${tab.windowId}-${tab.id}`}
+                          tab={tab}
+                          index={index}
+                          isSelected={index === activeIndex}
+                          setSize={tabs.length}
+                          previewUrl={previewUrls[String(tab.id)]}
+                          onClick={settings.disableMouseTabSwitcher ? undefined : () => void switchTab(tab)}
+                          onMouseEnter={settings.disableMouseTabSwitcher ? undefined : () => setSelectedIndex(index)}
+                          onToggleMute={settings.disableMouseTabSwitcher ? undefined : () => void muteTab(tab)}
+                        />
+                      );
+                    }),
+                  ];
                 })}
-                {end < tabs.length && (
-                  <div className="switcher-spacer" aria-hidden="true" style={{ width: spacerWidth(tabs.length - end) }} />
+                {(switcherRange.at(-1)?.end ?? 0) < tabs.length && (
+                  <div key="spacer-end" className="switcher-spacer" aria-hidden="true" style={{ width: spacerWidth(tabs.length - (switcherRange.at(-1)?.end ?? 0)) }} />
                 )}
               </>
             )}
