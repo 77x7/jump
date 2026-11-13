@@ -113,7 +113,14 @@ export type BrowserMessage =
   | { type: "open-url"; url: string; openerTabId?: number }
   | { type: "search-web"; query: string }
   | { type: "open-shortcut-settings" }
-  | { type: "open-palette"; mode?: "search" | "switcher" | "bookmarks"; activeTabId?: number }
+  | {
+    type: "open-palette";
+    mode?: "search" | "switcher" | "bookmarks";
+    activeTabId?: number;
+    /** Sent with the open so the first render already has the list and theme. */
+    tabs?: PaletteTab[];
+    settings?: UserSettings;
+  }
   | { type: "cycle-tab-switcher"; direction?: "next" | "prev" }
   | { type: "request-pin-selected-tab" }
   | { type: "request-mute-selected-tab" }

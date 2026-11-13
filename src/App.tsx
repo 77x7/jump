@@ -19,18 +19,23 @@ export function App({
   onClose,
   initialMode = "search",
   initialActiveTabId,
+  initialTabs,
+  initialSettings,
 }: {
   onClose: () => void;
   initialMode?: "search" | "switcher" | "bookmarks";
   initialActiveTabId?: number;
+  /** Tab list and settings sent with the open, so the first render is complete. */
+  initialTabs?: PaletteTab[];
+  initialSettings?: UserSettings;
 }) {
-  const [tabs, setTabs] = useState<PaletteTab[]>([]);
+  const [tabs, setTabs] = useState<PaletteTab[]>(initialTabs ?? []);
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
   const [recentBrowserHistory, setRecentBrowserHistory] = useState<BrowserHistoryItem[]>([]);
   const [browserHistory, setBrowserHistory] = useState<BrowserHistoryItem[]>([]);
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"search" | "switcher" | "bookmarks">(initialMode);
-  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<UserSettings>(initialSettings ?? DEFAULT_SETTINGS);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const requestedPreviewIds = useRef(new Set<number>());
   const requestedPreviewUrls = useRef(new Map<number, string>());
@@ -63,9 +68,12 @@ export function App({
   const isSwitcher = mode === "switcher";
   const isBookmarks = mode === "bookmarks";
   const isGallery = settings.viewMode === "gallery";
-  const [isExpanded, setIsExpanded] = useState(isSwitcher);
-  const [selectedIndex, setSelectedIndex] = useState(isSwitcher ? 1 : 0);
-  const initialSwitcherSelectionPending = useRef(isSwitcher && initialActiveTabId !== undefined);
+  const [isExpanded, setIsExpanded] = useState(isSwitcher || initialSettings?.paletteViewMode === "expanded");
+  const initialSwitcherIndex = isSwitcher && initialTabs && initialTabs.length > 0 && initialActiveTabId !== undefined
+    ? (initialTabs.findIndex((tab) => tab.id === initialActiveTabId) + 1 + initialTabs.length) % initialTabs.length
+    : undefined;
+  const [selectedIndex, setSelectedIndex] = useState(initialSwitcherIndex ?? (isSwitcher ? 1 : 0));
+  const initialSwitcherSelectionPending = useRef(isSwitcher && initialActiveTabId !== undefined && initialSwitcherIndex === undefined);
   const [isClosing, setIsClosing] = useState(false);
   const isClosingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -94,6 +102,8 @@ export function App({
   // Load and subscribe to persistent settings
   useMountEffect(() => {
     void getStoredSettings().then((loaded) => {
+      // Settings sent with the open are normally current; skip the re-render then.
+      if (initialSettings && JSON.stringify(loaded) === JSON.stringify(initialSettings)) return;
       setSettings(loaded);
       if (modeRef.current === "search") setIsExpanded(loaded.paletteViewMode === "expanded");
     });
@@ -212,6 +222,8 @@ export function App({
     try {
       const tabList = await getTabs();
       if (requestId !== tabsRequestIdRef.current) return;
+      // Usually identical to the list sent with the open: skip a re-render.
+      if (JSON.stringify(tabList) === JSON.stringify(tabsRef.current)) return;
       const staleTabIds = stalePreviewTabIds(tabsRef.current, tabList);
       invalidateTabPreviews(staleTabIds);
       tabsRef.current = tabList;

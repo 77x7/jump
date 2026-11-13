@@ -75,6 +75,8 @@ function openPalette(message: Extract<BrowserMessage, { type: "open-palette" }> 
         onClose={closePalette}
         initialMode={message.mode}
         initialActiveTabId={message.activeTabId}
+        initialTabs={message.tabs}
+        initialSettings={message.settings}
       />
     </EventRootContext.Provider>,
   );
