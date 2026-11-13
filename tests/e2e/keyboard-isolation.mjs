@@ -183,20 +183,17 @@ async function activeTabUrl(worker) {
   });
 }
 
-async function sendOpenPalette(worker, tabId, mode, activeTabId) {
+// Fires the extension's real command handler (the same code a keyboard
+// shortcut runs: tab list and settings sent with the open, injection on
+// first open). Playwright key presses do not reach browser-level shortcuts.
+async function sendOpenPalette(worker, tabId, mode) {
   await worker.evaluate(
-    async ({ tabId: targetTabId, mode: paletteMode, activeTabId: initialTabId }) => {
-      const message = { type: "open-palette", mode: paletteMode };
-      if (initialTabId !== undefined) message.activeTabId = initialTabId;
-      // Like the background: the palette is injected on first open.
-      try {
-        await chrome.tabs.sendMessage(targetTabId, message);
-      } catch {
-        await chrome.scripting.executeScript({ target: { tabId: targetTabId }, files: ["assets/content.js"] });
-        await chrome.tabs.sendMessage(targetTabId, message);
-      }
+    async ({ tabId: targetTabId, mode: paletteMode }) => {
+      const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (active?.id !== targetTabId) throw new Error(`target tab ${targetTabId} is not the active tab (${active?.id})`);
+      chrome.commands.onCommand.dispatch(paletteMode === "switcher" ? "open-tab-switcher" : "open-palette");
     },
-    { tabId, mode, activeTabId },
+    { tabId, mode },
   );
 }
 
@@ -350,7 +347,7 @@ async function main() {
     await palettePage.bringToFront();
     await sleep(400);
     await palettePage.evaluate(() => window.__fixtureReset());
-    await sendOpenPalette(worker, paletteTabId, "switcher", paletteTabId);
+    await sendOpenPalette(worker, paletteTabId, "switcher");
     await waitFor("switcher mounted", () => paletteMounted(palettePage));
     palette = await paletteHandle(palettePage);
     await checkEventually(

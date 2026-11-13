@@ -1,6 +1,6 @@
 import { parsePreviewEntries, retainOpenTabPreviews, type PreviewEntry } from "./previewCache";
 import { getStoredSettings, pinnedTabIdentity, saveStoredSettings } from "./settings";
-import type { BookmarkItem, BrowserMessage, PaletteTab } from "./types";
+import type { BookmarkItem, BrowserMessage, PaletteTab, UserSettings } from "./types";
 
 const LEGACY_PREVIEW_CACHE_KEY = "recent-tab-previews";
 const LEGACY_PREVIEW_CACHE_PREFIX = "tab-preview:";
@@ -222,11 +222,72 @@ async function sendToActiveTab(message: BrowserMessage, options?: { inject?: boo
   if (tab) await sendToTab(tab, message, options);
 }
 
+// Settings and the tab list are kept ready in memory and sent with every
+// open, so the palette's first render already shows the user's theme and
+// tabs instead of waiting for two round trips. Both are rebuilt when they
+// change; a service worker that was asleep rebuilds them on first use.
+let settingsCache: Promise<UserSettings> | undefined;
+let tabsCache: Promise<PaletteTab[]> | undefined;
+let tabsRebuildTimer: ReturnType<typeof setTimeout> | undefined;
+
+function cachedSettings() {
+  settingsCache ??= getStoredSettings().catch((error: unknown) => {
+    settingsCache = undefined;
+    throw error;
+  });
+  return settingsCache;
+}
+
+function cachedTabs() {
+  tabsCache ??= getTabs().catch((error: unknown) => {
+    tabsCache = undefined;
+    throw error;
+  });
+  return tabsCache;
+}
+
+function invalidateTabs() {
+  tabsCache = undefined;
+  if (tabsRebuildTimer !== undefined) clearTimeout(tabsRebuildTimer);
+  // Rebuild soon after a burst of tab events, so the next open finds it ready.
+  tabsRebuildTimer = setTimeout(() => {
+    tabsRebuildTimer = undefined;
+    void cachedTabs().catch(() => undefined);
+  }, 60);
+}
+
+[
+  chrome.tabs.onCreated,
+  chrome.tabs.onUpdated,
+  chrome.tabs.onActivated,
+  chrome.tabs.onMoved,
+  chrome.tabs.onAttached,
+  chrome.tabs.onDetached,
+  chrome.tabs.onReplaced,
+  chrome.tabs.onRemoved,
+  chrome.windows.onFocusChanged,
+  chrome.windows.onRemoved,
+].forEach((event) => (event as { addListener(callback: () => void): void }).addListener(invalidateTabs));
+
+chrome.storage.onChanged.addListener((_changes, areaName) => {
+  if (areaName !== "sync" && areaName !== "local") return;
+  settingsCache = undefined;
+  invalidateTabs();
+});
+
+async function openPaletteData() {
+  const [tabs, settings] = await Promise.all([
+    cachedTabs().catch(() => undefined),
+    cachedSettings().catch(() => undefined),
+  ]);
+  return { ...(tabs ? { tabs } : {}), ...(settings ? { settings } : {}) };
+}
+
 async function getTabs(): Promise<PaletteTab[]> {
   const [tabs, windows, settings] = await Promise.all([
     chrome.tabs.query({}),
     chrome.windows.getAll({ populate: false }),
-    getStoredSettings(),
+    cachedSettings(),
     previewCacheReady,
   ]);
   const browserTabs = tabs.filter(
@@ -359,7 +420,7 @@ async function openSearchPalette() {
   // Search mode does not need a fresh screenshot. Open it immediately and let
   // the switcher own screenshot capture, so the command never feels delayed.
   if (tab.id !== undefined) overlayTabIds.add(tab.id);
-  const opened = await sendToTab(tab, { type: "open-palette", mode: "search" }, { inject: true });
+  const opened = await sendToTab(tab, { type: "open-palette", mode: "search", ...(await openPaletteData()) }, { inject: true });
   if (!opened && tab.id !== undefined) overlayTabIds.delete(tab.id);
 }
 
@@ -391,6 +452,7 @@ async function openTabSwitcher() {
       type: "open-palette",
       mode: "switcher",
       activeTabId: tab.id,
+      ...(await openPaletteData()),
     }, { inject: true });
     if (!opened && tab.id !== undefined) overlayTabIds.delete(tab.id);
   } finally {
@@ -402,7 +464,9 @@ chrome.commands.onCommand.addListener((command) => {
   if (command === "open-palette") void openSearchPalette();
   if (command === "open-tab-switcher") void openTabSwitcher();
   if (command === "pin-tab") void sendToActiveTab({ type: "request-pin-selected-tab" });
-  if (command === "open-bookmarks") void sendToActiveTab({ type: "open-palette", mode: "bookmarks" }, { inject: true });
+  if (command === "open-bookmarks") {
+    void openPaletteData().then((data) => sendToActiveTab({ type: "open-palette", mode: "bookmarks", ...data }, { inject: true }));
+  }
 });
 
 chrome.action.onClicked.addListener(() => void openSearchPalette());
@@ -419,7 +483,7 @@ chrome.runtime.onMessage.addListener((message: BrowserMessage, sender, sendRespo
   }
 
   if (message.type === "get-tabs") {
-    void getTabs().then(sendResponse);
+    void cachedTabs().then(sendResponse, () => sendResponse([]));
     return true;
   }
 
