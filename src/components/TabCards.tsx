@@ -7,15 +7,26 @@ type CardProps = {
   index: number;
   isSelected: boolean;
   previewUrl?: string;
+  /** Total number of options, for assistive tech (the list is windowed). */
+  setSize?: number;
   onClick?: () => void;
   onMouseEnter?: () => void;
   onToggleMute?: () => void;
 };
 
-export function SwitcherCard({ tab, isSelected, previewUrl, index, onClick, onMouseEnter, onToggleMute }: CardProps) {
+export function SwitcherCard({ tab, isSelected, previewUrl, index, setSize, onClick, onMouseEnter, onToggleMute }: CardProps) {
   const effectivePreview = previewUrl;
   return (
-    <div data-switcher-index={index} className={`switcher-card ${isSelected ? "is-selected" : ""}`} onClick={onClick} onMouseEnter={onMouseEnter} role="option" aria-selected={isSelected}>
+    <div
+      data-switcher-index={index}
+      className={`switcher-card ${isSelected ? "is-selected" : ""}`}
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      role="option"
+      aria-selected={isSelected}
+      aria-setsize={setSize}
+      aria-posinset={index + 1}
+    >
       <div className="switcher-plate">
         <div className="switcher-thumbnail">
           {effectivePreview ? <img src={effectivePreview} alt="" className="switcher-thumbnail-image" loading="eager" decoding="async" /> : (
