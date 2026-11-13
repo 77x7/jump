@@ -92,6 +92,10 @@ export function App({
   const initialSwitcherSelectionPending = useRef(isSwitcher && initialActiveTabId !== undefined && initialSwitcherIndex === undefined);
   const [isClosing, setIsClosing] = useState(false);
   const isClosingRef = useRef(false);
+  // Set once the switcher has decided (switch, or close): keys still arriving
+  // while it closes, such as the release of the Escape or Enter just pressed,
+  // or of Alt, must not decide again.
+  const switcherDoneRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const switcherRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -452,8 +456,14 @@ export function App({
   // Switch to selected tab
   const switchTab = useCallback(
     async (targetTab?: PaletteTab) => {
-      if (!targetTab) return;
-      await activateTab(targetTab);
+      if (!targetTab || switcherDoneRef.current) return;
+      switcherDoneRef.current = true;
+      try {
+        await activateTab(targetTab);
+      } catch (error) {
+        switcherDoneRef.current = false;
+        throw error;
+      }
       handleClose();
     },
     [handleClose]
@@ -503,7 +513,7 @@ export function App({
         paletteDragModifierRef.current = false;
         setIsPaletteDragReady(false);
       }
-      if (modeRef.current !== "switcher") return;
+      if (modeRef.current !== "switcher" || switcherDoneRef.current || isClosingRef.current) return;
       if (event.key === "Alt" || !event.altKey) {
         const currentTabs = tabsRef.current;
         const currentIndex = selectedIndexRef.current;
@@ -534,9 +544,16 @@ export function App({
       }
 
       if (modeRef.current !== "switcher") return;
+      if (switcherDoneRef.current || isClosingRef.current) {
+        // Closing: keep the keys inside the palette, but act on none of them.
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
+        switcherDoneRef.current = true;
         handleCloseRef.current();
         return;
       }
