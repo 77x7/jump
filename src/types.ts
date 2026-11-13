@@ -139,6 +139,7 @@ export type BrowserMessage =
   | { type: "cycle-tab-switcher"; direction?: "next" | "prev" }
   | { type: "request-pin-selected-tab" }
   | { type: "request-mute-selected-tab" }
+  | { type: "request-close-selected-tab" }
   | { type: "get-bookmarks" }
   | { type: "open-bookmark"; url: string }
   | { type: "set-tab-pinned"; tab: PinnedTab; pinned: boolean }

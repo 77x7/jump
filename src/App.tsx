@@ -26,6 +26,7 @@ export function App({
   startInStandby = false,
   activateRef,
   openHandlerRef,
+  messageHandlerRef,
 }: {
   onClose: () => void;
   initialMode?: "search" | "switcher" | "bookmarks";
@@ -43,6 +44,8 @@ export function App({
   activateRef?: { current?: (message: Extract<BrowserMessage, { type: "open-palette" }>) => void };
   /** Set by the content script, which then routes open messages here. */
   openHandlerRef?: { current?: (message: Extract<BrowserMessage, { type: "open-palette" }>) => void };
+  /** Set when messages arrive another way than chrome.runtime (the popup's port). */
+  messageHandlerRef?: { current?: (message: BrowserMessage) => void };
 }) {
   const [tabs, setTabs] = useState<PaletteTab[]>(initialTabs ?? []);
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
@@ -459,6 +462,14 @@ export function App({
         } else if (selectedResult?.kind === "pinned") {
           void setTabPinned(selectedResult.tab, false);
         }
+      } else if (message.type === "request-close-selected-tab") {
+        const currentTabs = tabsRef.current;
+        const currentIndex = selectedIndexRef.current;
+        const result = resultsRef.current[currentIndex];
+        const target = modeRef.current === "switcher"
+          ? currentTabs[currentIndex]
+          : modeRef.current === "search" && result?.kind === "tab" ? result.tab : undefined;
+        if (target) closeTabRef.current(target);
       } else if (message.type === "request-mute-selected-tab") {
         const currentTabs = tabsRef.current;
         const currentIndex = selectedIndexRef.current;
@@ -470,6 +481,7 @@ export function App({
       }
     };
 
+    if (messageHandlerRef) messageHandlerRef.current = handleMessage;
     if (chrome.runtime?.onMessage) {
       chrome.runtime.onMessage.addListener(handleMessage);
       return () => chrome.runtime.onMessage.removeListener(handleMessage);
@@ -506,6 +518,7 @@ export function App({
 
   // Middle click on a tab closes it. The list drops it at once; the refresh
   // after the close brings in whatever else changed.
+  const closeTabRef = useRef<(target: PaletteTab) => void>(() => undefined);
   const closeTabFromPalette = useCallback((target: PaletteTab) => {
     const remaining = tabsRef.current.filter((tab) => tab.id !== target.id);
     tabsRef.current = remaining;
@@ -514,6 +527,7 @@ export function App({
     setTabs(remaining);
     void closeTab(target).catch(() => undefined).finally(() => void refreshTabsRef.current());
   }, []);
+  closeTabRef.current = closeTabFromPalette;
 
   const executeResult = useCallback((result?: SearchResult) => {
     if (!result) return;

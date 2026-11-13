@@ -558,6 +558,28 @@ async function openPaletteIn(tab: chrome.tabs.Tab, message: OpenMessage) {
   await openInToolbarPopup(message);
 }
 
+// Commands for the palette that is showing: the popup one if open, else the
+// one in the active tab.
+async function sendToPalette(message: BrowserMessage) {
+  if (palettePopupPort) {
+    palettePopupPort.postMessage(message);
+    return;
+  }
+  await sendToActiveTab(message);
+}
+
+// The "Close tab" command (no default key; users bind it, for example to
+// Ctrl+W, which pages cannot receive). With a palette showing it closes the
+// tab selected there; otherwise it closes the current tab, as Ctrl+W would.
+async function closeSelectedOrCurrentTab() {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (palettePopupPort || (tab?.id !== undefined && overlayTabIds.has(tab.id))) {
+    await sendToPalette({ type: "request-close-selected-tab" });
+    return;
+  }
+  if (tab?.id !== undefined) await chrome.tabs.remove(tab.id).catch(() => undefined);
+}
+
 async function openSearchPalette() {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab) return;
@@ -598,7 +620,8 @@ async function openTabSwitcher() {
 chrome.commands.onCommand.addListener((command) => {
   if (command === "open-palette") void openSearchPalette();
   if (command === "open-tab-switcher") void openTabSwitcher();
-  if (command === "pin-tab") void sendToActiveTab({ type: "request-pin-selected-tab" });
+  if (command === "pin-tab") void sendToPalette({ type: "request-pin-selected-tab" });
+  if (command === "close-tab") void closeSelectedOrCurrentTab();
   if (command === "open-bookmarks") {
     void chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([tab]) => {
       if (tab) await openPaletteIn(tab, { type: "open-palette", mode: "bookmarks", ...(await openPaletteData()) });
