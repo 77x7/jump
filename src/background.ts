@@ -2,9 +2,8 @@ import { parsePreviewEntries, retainOpenTabPreviews, type PreviewEntry } from ".
 import { getStoredSettings, pinnedTabIdentity, saveStoredSettings } from "./settings";
 import type { BookmarkItem, BrowserMessage, PaletteTab, TabList, TabPreview, UserSettings } from "./types";
 
-const LEGACY_PREVIEW_CACHE_KEY = "recent-tab-previews";
-const LEGACY_PREVIEW_CACHE_PREFIX = "tab-preview:";
 const PREVIEW_CACHE_PREFIX = "tab-preview-v2:";
+const PREVIEW_INDEX_KEY = "tab-preview-index-v1";
 const PREVIEW_CAPTURE_INTERVAL_MS = 550;
 const PREVIEW_MAX_WIDTH = 640;
 const PREVIEW_MAX_HEIGHT = 400;
@@ -31,7 +30,14 @@ function enqueuePinUpdate(update: () => Promise<void>) {
   return operation;
 }
 
-const previewCache = new Map<number, PreviewEntry>();
+// Previews live in session storage, one key per tab, plus a small index of
+// which tab has which capture. A service worker that wakes up (Chrome stops it
+// after 30 s idle, so most opens start one) loads only the index; images load
+// for the tabs the palette asks for. Loading every image on wake took ~50 ms
+// with 40 tabs and grew with each tab.
+type PreviewStamp = { url: string; capturedAt: number };
+const previewIndex = new Map<number, PreviewStamp>();
+const previewImages = new Map<number, PreviewEntry>();
 const overlayTabIds = new Set<number>();
 let lastPreviewCaptureStartedAt = 0;
 
@@ -78,41 +84,75 @@ async function compactPreview(dataUrl: string) {
   }
 }
 
+function previewIndexObject() {
+  return Object.fromEntries([...previewIndex].map(([tabId, stamp]) => [String(tabId), stamp]));
+}
+
 async function persistPreview(entry: PreviewEntry) {
   try {
-    await chrome.storage.session.set({ [previewStorageKey(entry.tabId)]: entry });
+    await chrome.storage.session.set({ [previewStorageKey(entry.tabId)]: entry, [PREVIEW_INDEX_KEY]: previewIndexObject() });
   } catch {
     // The in-memory cache remains usable if session storage is unavailable.
   }
 }
 
-const previewCacheReady = chrome.storage.session
-  .get(null)
-  .then(async (stored) => {
-    const keyedEntries = Object.entries(stored).flatMap(([key, value]) =>
-      key.startsWith(PREVIEW_CACHE_PREFIX) ? parsePreviewEntries([value]) : []
-    );
-    keyedEntries.forEach((entry) => previewCache.set(entry.tabId, entry));
+function setPreview(entry: PreviewEntry) {
+  previewImages.set(entry.tabId, entry);
+  previewIndex.set(entry.tabId, { url: entry.url, capturedAt: entry.capturedAt });
+}
 
-    // Version 1 previews may contain the palette itself and used a much lower
-    // quality encode. Drop them instead of carrying bad images forward.
-    const obsoletePreviewKeys = Object.keys(stored).filter((key) =>
-      key === LEGACY_PREVIEW_CACHE_KEY || key.startsWith(LEGACY_PREVIEW_CACHE_PREFIX)
-    );
-    if (obsoletePreviewKeys.length > 0) {
-      await chrome.storage.session.remove(obsoletePreviewKeys);
+// The stored preview of each tab, loading only images not yet in memory. An
+// image whose capture no longer matches the index (replaced meanwhile) is
+// never returned.
+async function loadPreviews(tabIds: number[]) {
+  await previewIndexReady;
+  const current = (tabId: number) => {
+    const stamp = previewIndex.get(tabId);
+    const entry = previewImages.get(tabId);
+    return stamp && entry?.capturedAt === stamp.capturedAt && entry.url === stamp.url ? entry : undefined;
+  };
+  const missing = tabIds.filter((tabId) => previewIndex.has(tabId) && !current(tabId));
+  if (missing.length > 0) {
+    const stored = await chrome.storage.session.get(missing.map(previewStorageKey)).catch(() => ({}));
+    for (const entry of parsePreviewEntries(Object.values(stored))) {
+      const stamp = previewIndex.get(entry.tabId);
+      if (stamp?.capturedAt === entry.capturedAt && stamp.url === entry.url && !current(entry.tabId)) {
+        previewImages.set(entry.tabId, entry);
+      }
+    }
+  }
+  return tabIds.flatMap((tabId) => current(tabId) ?? []);
+}
+
+// Session storage is cleared whenever the extension is reloaded or updated,
+// so no older preview format can be present.
+const previewIndexReady = chrome.storage.session
+  .get(PREVIEW_INDEX_KEY)
+  .then((stored) => {
+    const index: unknown = stored[PREVIEW_INDEX_KEY];
+    if (typeof index !== "object" || index === null) return;
+    for (const [tabId, stamp] of Object.entries(index)) {
+      if (typeof stamp?.url === "string" && typeof stamp.capturedAt === "number" && !previewIndex.has(Number(tabId))) {
+        previewIndex.set(Number(tabId), { url: stamp.url, capturedAt: stamp.capturedAt });
+      }
     }
   })
   .catch(() => {});
 
-async function removeCachedPreview(tabId: number) {
-  await previewCacheReady;
-  previewCache.delete(tabId);
-  await chrome.storage.session.remove(previewStorageKey(tabId)).catch(() => undefined);
+async function removeCachedPreviews(tabIds: number[]) {
+  await previewIndexReady;
+  const present = tabIds.filter((tabId) => previewIndex.has(tabId) || previewImages.has(tabId));
+  if (present.length === 0) return;
+  present.forEach((tabId) => {
+    previewIndex.delete(tabId);
+    previewImages.delete(tabId);
+  });
+  await chrome.storage.session.remove(present.map(previewStorageKey)).catch(() => undefined);
+  await chrome.storage.session.set({ [PREVIEW_INDEX_KEY]: previewIndexObject() }).catch(() => undefined);
 }
 
 async function capturePreview(tabId: number, windowId: number) {
-  await previewCacheReady;
+  await previewIndexReady;
 
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -129,16 +169,16 @@ async function capturePreview(tabId: number, windowId: number) {
       dataUrl: capturedDataUrl,
       capturedAt,
     };
-    previewCache.set(tabId, entry);
+    setPreview(entry);
 
     // Make the raw preview available immediately. Compression and storage are
     // background work so they cannot delay the switcher or its repeat rate.
     void compactPreview(capturedDataUrl).then(async (dataUrl) => {
       if (dataUrl === null) return;
-      const currentEntry = previewCache.get(tabId);
+      const currentEntry = previewImages.get(tabId);
       if (currentEntry?.capturedAt !== capturedAt || currentEntry.url !== tab.url) return;
       const compactedEntry = { ...entry, dataUrl };
-      previewCache.set(tabId, compactedEntry);
+      setPreview(compactedEntry);
       await persistPreview(compactedEntry);
     }).catch(() => undefined);
     return entry;
@@ -182,10 +222,10 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   if (windowId !== chrome.windows.WINDOW_ID_NONE) schedulePreviewCapture(windowId);
 });
 
-// The palette bundle (~330 KB) is not a declared content script: pages only
-// carry the 2 KB keyboard guard, and the palette is injected into a tab the
-// first time it is opened there. It runs in the same isolated world as the
-// guard, so they share state.
+// The palette script is declared in the manifest, so every page loads it and
+// preloads the palette. Tabs opened before the extension was installed or
+// reloaded have no copy: it is injected there on the first open. It runs in the
+// same isolated world as the keyboard guard, so they share state.
 const PALETTE_SCRIPT = "assets/content.js";
 
 // One injection per tab at a time: a second open that arrives while the first
@@ -332,7 +372,7 @@ async function getTabs(): Promise<PaletteTab[]> {
     chrome.tabs.query({}),
     chrome.windows.getAll({ populate: false }),
     cachedSettings(),
-    previewCacheReady,
+    previewIndexReady,
   ]);
   const browserTabs = tabs.filter(
     (tab): tab is chrome.tabs.Tab & { id: number; windowId: number } => tab.id !== undefined,
@@ -369,13 +409,10 @@ async function getTabs(): Promise<PaletteTab[]> {
       await saveStoredSettings({ pinnedTabs: migratedTabs });
     });
   }
-  const retainedPreviews = retainOpenTabPreviews(previewCache.values(), browserTabs);
-  const retainedTabIds = new Set(retainedPreviews.map((entry) => entry.tabId));
-  const staleTabIds = [...previewCache.keys()].filter((tabId) => !retainedTabIds.has(tabId));
-  staleTabIds.forEach((tabId) => previewCache.delete(tabId));
-  if (staleTabIds.length > 0) {
-    void chrome.storage.session.remove(staleTabIds.map(previewStorageKey)).catch(() => undefined);
-  }
+  const indexedPreviews = [...previewIndex].map(([tabId, stamp]) => ({ tabId, url: stamp.url }));
+  const retainedTabIds = new Set(retainOpenTabPreviews(indexedPreviews, browserTabs).map((entry) => entry.tabId));
+  const staleTabIds = indexedPreviews.map((entry) => entry.tabId).filter((tabId) => !retainedTabIds.has(tabId));
+  if (staleTabIds.length > 0) void removeCachedPreviews(staleTabIds);
 
   const focusedWindows = new Set(windows.filter((window) => window.focused).map((window) => window.id));
 
@@ -415,13 +452,13 @@ chrome.history.onVisitRemoved.addListener(invalidateHistoryCache);
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   overlayTabIds.delete(tabId);
-  void removeCachedPreview(tabId);
+  void removeCachedPreviews([tabId]);
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "loading" || changeInfo.url !== undefined) {
     overlayTabIds.delete(tabId);
-    void removeCachedPreview(tabId);
+    void removeCachedPreviews([tabId]);
   }
 });
 
@@ -484,8 +521,8 @@ async function openTabSwitcher() {
     // the active tab's preview stamp; the palette fetches the image when the
     // one it holds is older.
     if (tab.id !== undefined) overlayTabIds.add(tab.id);
-    await previewCacheReady;
-    const activePreview = tab.id !== undefined ? previewCache.get(tab.id) : undefined;
+    await previewIndexReady;
+    const activePreview = tab.id !== undefined ? previewIndex.get(tab.id) : undefined;
     const opened = await sendToTab(tab, {
       type: "open-palette",
       mode: "switcher",
@@ -537,12 +574,11 @@ chrome.runtime.onMessage.addListener((message: BrowserMessage, sender, sendRespo
     const tabIds = message.tabIds
       .filter((tabId) => Number.isInteger(tabId) && tabId > 0)
       .slice(0, 12);
-    void previewCacheReady.then(() => {
-      sendResponse(Object.fromEntries(tabIds.flatMap((tabId) => {
-        const preview = previewCache.get(tabId);
-        return preview ? [[String(tabId), { dataUrl: preview.dataUrl, capturedAt: preview.capturedAt } satisfies TabPreview]] : [];
-      })));
-    });
+    void loadPreviews(tabIds).then((previews) => {
+      sendResponse(Object.fromEntries(previews.map((preview) =>
+        [String(preview.tabId), { dataUrl: preview.dataUrl, capturedAt: preview.capturedAt } satisfies TabPreview]
+      )));
+    }, () => sendResponse({}));
     return true;
   }
 
