@@ -169,6 +169,17 @@ try {
     const after = await selected();
     check("the switcher shortcut again cycles the popup switcher", Number.isInteger(before) && after !== before, `before=${before} after=${after}`);
     await popup.screenshot("popup-switcher.png");
+    // The "Close tab" command closes the selected card's tab, popup stays open.
+    const cardTitle = await popup.evaluate("document.querySelector('.palette-popup').shadowRoot.querySelector('.switcher-card.is-selected .switcher-card-title')?.textContent");
+    const urlsBefore = await worker.evaluate(async () => (await chrome.tabs.query({})).map((tab) => tab.url));
+    await worker.evaluate(() => chrome.commands.onCommand.dispatch("close-tab"));
+    await sleep(600);
+    const urlsAfter = await worker.evaluate(async () => (await chrome.tabs.query({})).map((tab) => tab.url));
+    check(
+      "the close-tab command closes the selected tab in the popup switcher",
+      urlsAfter.length === urlsBefore.length - 1 && Boolean(await findPopup()),
+      `selected=${cardTitle} before=${urlsBefore.length} after=${urlsAfter.length}`,
+    );
     await popup.evaluate("window.close()");
   }
 } finally {

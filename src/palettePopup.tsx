@@ -24,13 +24,18 @@ document.body.append(host);
 
 let root: Root | undefined;
 const openHandlerRef: { current?: (message: OpenMessage) => void } = {};
+const messageHandlerRef: { current?: (message: BrowserMessage) => void } = {};
 
 // The background sends the open message once this port connects, and later
 // opens (such as another press of the switcher shortcut, which cycles it) the
 // same way while the popup stays open.
 const port = chrome.runtime.connect({ name: "palette-popup" });
 port.onMessage.addListener((message: BrowserMessage) => {
-  if (message.type !== "open-palette") return;
+  if (message.type !== "open-palette") {
+    // Commands for the open palette (close or pin the selected tab).
+    messageHandlerRef.current?.(message);
+    return;
+  }
   if (root) {
     openHandlerRef.current?.(message);
     return;
@@ -45,6 +50,7 @@ port.onMessage.addListener((message: BrowserMessage) => {
         initialTabsVersion={message.tabsVersion}
         initialSettings={message.settings}
         openHandlerRef={openHandlerRef}
+        messageHandlerRef={messageHandlerRef}
         onClose={() => window.close()}
       />
     </EventRootContext.Provider>,

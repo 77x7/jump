@@ -83,6 +83,9 @@
         "mac": "Alt+B"
       },
       "description": "Open the bookmark manager"
+    },
+    "close-tab": {
+      "description": "Close the tab selected in the palette (or the current tab when the palette is closed)"
     }
   }
 }
