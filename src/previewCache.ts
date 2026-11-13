@@ -28,7 +28,7 @@ export function parsePreviewEntries(value: unknown) {
   );
 }
 
-export function retainOpenTabPreviews(entries: Iterable<PreviewEntry>, tabs: Iterable<OpenTab>) {
+export function retainOpenTabPreviews<T extends { tabId: number; url: string }>(entries: Iterable<T>, tabs: Iterable<OpenTab>) {
   const openTabUrls = new Map([...tabs].map((tab) => [tab.id, tab.url]));
   return [...entries].filter((entry) => openTabUrls.get(entry.tabId) === entry.url);
 }

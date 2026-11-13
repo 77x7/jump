@@ -43,8 +43,7 @@
     }
   ],
   "background": {
-    "service_worker": "assets/background.js",
-    "type": "module"
+    "service_worker": "assets/background.js"
   },
   "action": {
     "default_title": "Jump Settings",
