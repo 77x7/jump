@@ -102,6 +102,13 @@ export type PaletteTab = {
   lastAccessed?: number;
 };
 
+/**
+ * The tab list with a version string. The background gives a new version only
+ * when the list's content changed, so the palette can tell an unchanged list
+ * by comparing one string instead of the whole list.
+ */
+export type TabList = { tabs: PaletteTab[]; version: string };
+
 export type BrowserMessage =
   | { type: "get-tabs" }
   | { type: "get-tab-previews"; tabIds: number[] }
@@ -119,7 +126,11 @@ export type BrowserMessage =
     activeTabId?: number;
     /** Sent with the open so the first render already has the list and theme. */
     tabs?: PaletteTab[];
+    /** Identifies `tabs`; equal versions mean an identical list (see TabList). */
+    tabsVersion?: string;
     settings?: UserSettings;
+    /** The switcher's background just captured a fresh preview of this tab. */
+    previewCaptured?: boolean;
   }
   | { type: "cycle-tab-switcher"; direction?: "next" | "prev" }
   | { type: "request-pin-selected-tab" }
