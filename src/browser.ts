@@ -61,6 +61,10 @@ function isTabMuteResult(value: unknown): value is TabMuteResult {
     "muted" in value && typeof value.muted === "boolean";
 }
 
+export async function closeTab(tab: PaletteTab) {
+  await chrome.runtime.sendMessage({ type: "close-tab", tabId: tab.id } satisfies BrowserMessage);
+}
+
 export async function setTabMuted(tab: PaletteTab) {
   const response: unknown = await chrome.runtime.sendMessage({
     type: "toggle-tab-muted",

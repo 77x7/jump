@@ -120,6 +120,7 @@ export type BrowserMessage =
   | { type: "search-history"; query: string; maxResults?: number }
   | { type: "activate-tab"; tab: PaletteTab }
   | { type: "toggle-tab-muted"; tabId: number; muted: boolean }
+  | { type: "close-tab"; tabId: number }
   | { type: "open-url"; url: string; openerTabId?: number }
   | { type: "search-web"; query: string }
   | { type: "open-shortcut-settings" }

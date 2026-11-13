@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { activateTab, getBrowserHistory, getTabPreviews, getTabs, notifyPaletteClosed, notifyPaletteOpened, openUrl, searchWeb, setTabMuted, setTabPinned, type BrowserHistoryItem } from "./browser";
+import { activateTab, closeTab, getBrowserHistory, getTabPreviews, getTabs, notifyPaletteClosed, notifyPaletteOpened, openUrl, searchWeb, setTabMuted, setTabPinned, type BrowserHistoryItem } from "./browser";
 import { ArrowRightIcon, CornerDownLeftIcon, PinIcon, XIcon } from "./icons";
 import { PaletteAction } from "./PaletteAction";
 import { canStartPaletteDrag, dragPreviewCellForPoint, isAltModifierActive, nextFreeDragPosition, snapPalettePosition } from "./paletteDrag";
@@ -12,7 +12,7 @@ import { useResolvedAppearance } from "./appearance";
 import { useEventRoot } from "./eventRoot";
 import { useMountEffect } from "./hooks/useMountEffect";
 import { TabFavicon, TabSoundIndicator } from "./components/TabVisuals";
-import { GalleryCard, SwitcherCard } from "./components/TabCards";
+import { GalleryCard, SwitcherCard, middleClickProps } from "./components/TabCards";
 import { BookmarkManager } from "./components/BookmarkManager";
 import type { BrowserMessage, PalettePosition, PaletteTab, UserSettings } from "./types";
 
@@ -503,6 +503,17 @@ export function App({
       : tab));
   }, []);
   muteTabRef.current = muteTab;
+
+  // Middle click on a tab closes it. The list drops it at once; the refresh
+  // after the close brings in whatever else changed.
+  const closeTabFromPalette = useCallback((target: PaletteTab) => {
+    const remaining = tabsRef.current.filter((tab) => tab.id !== target.id);
+    tabsRef.current = remaining;
+    tabsVersionRef.current = undefined;
+    tabsRequestIdRef.current += 1;
+    setTabs(remaining);
+    void closeTab(target).catch(() => undefined).finally(() => void refreshTabsRef.current());
+  }, []);
 
   const executeResult = useCallback((result?: SearchResult) => {
     if (!result) return;
@@ -1051,6 +1062,7 @@ export function App({
                           onClick={settings.disableMouseTabSwitcher ? undefined : () => void switchTab(tab)}
                           onMouseEnter={settings.disableMouseTabSwitcher ? undefined : () => hoverSelect(index)}
                           onToggleMute={settings.disableMouseTabSwitcher ? undefined : () => void muteTab(tab)}
+                          onCloseTab={settings.disableMouseTabSwitcher ? undefined : () => closeTabFromPalette(tab)}
                         />
                       );
                     }),
@@ -1188,6 +1200,7 @@ export function App({
                     onClick={settings.disableMouseCommandPalette ? undefined : () => executeResult(result)}
                     onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => hoverSelect(index)}
                     onToggleMute={settings.disableMouseCommandPalette ? undefined : () => void muteTab(result.tab)}
+                    onCloseTab={settings.disableMouseCommandPalette ? undefined : () => closeTabFromPalette(result.tab)}
                   />
                 ) : (
                   <PaletteAction
@@ -1225,6 +1238,7 @@ export function App({
                       aria-selected={isSelected}
                       onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => hoverSelect(index)}
                       onClick={settings.disableMouseCommandPalette ? undefined : () => executeResult(result)}
+                      {...middleClickProps(settings.disableMouseCommandPalette ? undefined : () => closeTabFromPalette(tab))}
                     >
                       <div className="list-row-left">
                         <span className="tab-favicon-wrapper">

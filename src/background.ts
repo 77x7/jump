@@ -655,6 +655,11 @@ chrome.runtime.onMessage.addListener((message: BrowserMessage, sender, sendRespo
     return true;
   }
 
+  if (message.type === "close-tab") {
+    void chrome.tabs.remove(message.tabId).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
+    return true;
+  }
+
   if (message.type === "toggle-tab-muted") {
     void chrome.tabs.update(message.tabId, { muted: message.muted })
       .then(() => sendResponse({ ok: true, muted: message.muted }), () => sendResponse({ ok: false, muted: false }));
