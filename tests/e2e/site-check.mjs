@@ -133,7 +133,13 @@ try {
     if (tabId === undefined) throw new Error(`no ${siteOrigin} tab visible to the extension`);
     await page.screenshot({ path: path.join(artifactDir, `${siteName}-before.png`) });
     await worker.evaluate(async (id) => {
-      await chrome.tabs.sendMessage(id, { type: "open-palette", mode: "search" });
+      // Like the background: the palette is injected on first open.
+      try {
+        await chrome.tabs.sendMessage(id, { type: "open-palette", mode: "search" });
+      } catch {
+        await chrome.scripting.executeScript({ target: { tabId: id }, files: ["assets/content.js"] });
+        await chrome.tabs.sendMessage(id, { type: "open-palette", mode: "search" });
+      }
     }, tabId);
     await sleep(800);
     const palette = await paletteShadowRoot(page);

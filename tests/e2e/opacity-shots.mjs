@@ -126,7 +126,13 @@ async function main() {
         let lastError;
         while (Date.now() < deadline) {
           try {
-            await chrome.tabs.sendMessage(tabId, { type: "open-palette", mode });
+            // Like the background: the palette is injected on first open.
+            try {
+              await chrome.tabs.sendMessage(tabId, { type: "open-palette", mode });
+            } catch {
+              await chrome.scripting.executeScript({ target: { tabId: tabId }, files: ["assets/content.js"] });
+              await chrome.tabs.sendMessage(tabId, { type: "open-palette", mode });
+            }
             return;
           } catch (error) {
             lastError = String(error);
