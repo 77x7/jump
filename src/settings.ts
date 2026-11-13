@@ -9,7 +9,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   disableMouseBookmarks: false,
   tabSwitchMode: "recent",
   paletteViewMode: "collapsed",
-  paletteOpacity: 1,
+  paletteOpacity: 0.84,
+  paletteBlur: 40,
   pinnedTabs: [],
   palettePosition: { x: 0.5, y: 0.28 },
 };
@@ -214,10 +215,18 @@ function isPaletteViewMode(value: unknown): value is PaletteViewMode {
   return value === "collapsed" || value === "expanded";
 }
 
+export const MAX_PALETTE_BLUR = 40;
+
 function parsePaletteOpacity(value: unknown) {
   return typeof value === "number" && Number.isFinite(value)
-    ? Math.min(1, Math.max(0.4, value))
+    ? Math.min(1, Math.max(0, value))
     : DEFAULT_SETTINGS.paletteOpacity;
+}
+
+function parsePaletteBlur(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(MAX_PALETTE_BLUR, Math.max(0, value))
+    : DEFAULT_SETTINGS.paletteBlur;
 }
 
 function isBoolean(value: unknown): value is boolean {
@@ -307,13 +316,16 @@ export function parseStoredSettings(value: unknown): UserSettings {
   const paletteOpacity = "paletteOpacity" in value
     ? parsePaletteOpacity(value.paletteOpacity)
     : DEFAULT_SETTINGS.paletteOpacity;
+  const paletteBlur = "paletteBlur" in value
+    ? parsePaletteBlur(value.paletteBlur)
+    : DEFAULT_SETTINGS.paletteBlur;
   const pinnedTabs = "pinnedTabs" in value
     ? parsePinnedTabs(value.pinnedTabs)
     : "pinnedTabIds" in value
       ? parseLegacyPinnedTabs(value.pinnedTabIds)
       : DEFAULT_SETTINGS.pinnedTabs;
   const palettePosition = "palettePosition" in value ? parsePalettePosition(value.palettePosition) : DEFAULT_SETTINGS.palettePosition;
-  return { viewMode, theme, colorScheme, disableMouseTabSwitcher, disableMouseCommandPalette, disableMouseBookmarks, tabSwitchMode, paletteViewMode, paletteOpacity, pinnedTabs, palettePosition };
+  return { viewMode, theme, colorScheme, disableMouseTabSwitcher, disableMouseCommandPalette, disableMouseBookmarks, tabSwitchMode, paletteViewMode, paletteOpacity, paletteBlur, pinnedTabs, palettePosition };
 }
 
 function parseSettingsUpdate(value: unknown): Partial<UserSettings> {
@@ -339,6 +351,9 @@ function parseSettingsUpdate(value: unknown): Partial<UserSettings> {
       : {}),
     ...( "paletteOpacity" in value && typeof value.paletteOpacity === "number" && Number.isFinite(value.paletteOpacity)
       ? { paletteOpacity: parsePaletteOpacity(value.paletteOpacity) }
+      : {}),
+    ...( "paletteBlur" in value && typeof value.paletteBlur === "number" && Number.isFinite(value.paletteBlur)
+      ? { paletteBlur: parsePaletteBlur(value.paletteBlur) }
       : {}),
     ...( "pinnedTabs" in value ? { pinnedTabs: parsePinnedTabs(value.pinnedTabs) } : {}),
     ...( "pinnedTabIds" in value && Array.isArray(value.pinnedTabIds)
@@ -385,6 +400,7 @@ async function readChromeLocalSettings() {
     "tabSwitchMode",
     "paletteViewMode",
     "paletteOpacity",
+    "paletteBlur",
     "pinnedTabs",
     "pinnedTabIds",
     "palettePosition",
@@ -417,6 +433,7 @@ export async function getStoredSettings(): Promise<UserSettings> {
         "tabSwitchMode",
         "paletteViewMode",
         "paletteOpacity",
+        "paletteBlur",
         "pinnedTabs",
         "pinnedTabIds",
         "palettePosition",
