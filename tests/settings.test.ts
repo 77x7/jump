@@ -245,3 +245,9 @@ test("a failed sync write selects localStorage for later reads", async () => {
     "gallery",
   );
 });
+
+test("changing one theme slot keeps the other slot migrated from the legacy theme", () => {
+  const settings = parseStoredSettings({ theme: "gruvbox-dark", colorScheme: "dark", lightTheme: "rose-pine-dawn" });
+  assert.equal(settings.lightTheme, "rose-pine-dawn");
+  assert.equal(settings.darkTheme, "gruvbox-dark");
+});

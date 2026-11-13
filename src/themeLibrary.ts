@@ -193,7 +193,16 @@ export function importThemes(text: string, existing: { customThemes: CustomTheme
     const importedOverrides = parseThemeOverrides(record.themeOverrides);
     for (const [id, colors] of Object.entries(importedOverrides)) {
       const target = idRemap.get(id) ?? id;
-      themeOverrides[target] = { ...themeOverrides[target], ...colors };
+      if (isCustomThemeId(target)) {
+        // Fold a custom theme's overrides into its own colours, so the picker
+        // (which edits custom colours) stays in control and themeOverrides only
+        // ever holds preset ids (bounded size for chrome.storage.sync).
+        const index = customThemes.findIndex((theme) => theme.id === target);
+        if (index === -1) continue;
+        customThemes[index] = { ...customThemes[index], colors: { ...customThemes[index].colors, ...colors } };
+      } else {
+        themeOverrides[target] = { ...themeOverrides[target], ...colors };
+      }
       importedOverrideCount += 1;
     }
   }

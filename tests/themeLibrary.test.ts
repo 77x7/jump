@@ -106,7 +106,7 @@ test("import keeps at most ten themes in total", () => {
   assert.equal(merged.importedCount, 1);
 });
 
-test("import regenerates ids on collision and remaps their overrides", () => {
+test("import regenerates ids on collision and folds their overrides into the renamed theme", () => {
   const existing: CustomTheme[] = [{
     id: "custom-dup00001",
     name: "Existing",
@@ -123,8 +123,9 @@ test("import regenerates ids on collision and remaps their overrides", () => {
   assert.notEqual(imported.id, "custom-dup00001");
   assert.match(imported.id, /^custom-[a-z0-9]+$/);
   assert.equal(imported.name, "Imported");
-  assert.deepEqual(result.themeOverrides[imported.id], { accent: "#ff0000" });
-  assert.equal(result.themeOverrides["custom-dup00001"], undefined);
+  assert.equal(imported.colors.accent, "#ff0000");
+  assert.deepEqual(result.customThemes[0].colors, {});
+  assert.deepEqual(result.themeOverrides, {});
 });
 
 test("import drops unknown top-level keys and non-object entries", () => {
@@ -140,9 +141,9 @@ test("import drops unknown top-level keys and non-object entries", () => {
     name: "Keep",
     base: "nord",
     scheme: "dark",
-    colors: { accent: "#22d3ee", background: "#001122" },
+    colors: { accent: "#00ff00", background: "#001122" },
   });
-  assert.deepEqual(result.themeOverrides, { "custom-keep0001": { accent: "#00ff00" } });
+  assert.deepEqual(result.themeOverrides, {});
 });
 
 test("import generates an id for entries without one", () => {
@@ -167,4 +168,19 @@ test("stored theme arrays and overrides are sanitised", () => {
   assert.deepEqual(parseThemeOverrides({ nord: { accent: "#FFFFFF" }, bad: { accent: "#ffffff" } }), {
     nord: { accent: "#ffffff" },
   });
+});
+
+test("import folds overrides for custom ids into the theme and drops unknown custom ids", () => {
+  const file = JSON.stringify({
+    version: 1,
+    customThemes: [{ id: "custom-abc", name: "Ocean", base: "default", scheme: "dark", colors: { accent: "#111111" } }],
+    themeOverrides: {
+      "custom-abc": { accent: "#222222" },
+      "custom-ghost": { accent: "#333333" },
+      nord: { text: "#eeeeee" },
+    },
+  });
+  const result = importThemes(file, { customThemes: [], themeOverrides: {} });
+  assert.equal(result.customThemes[0].colors.accent, "#222222");
+  assert.deepEqual(Object.keys(result.themeOverrides), ["nord"]);
 });

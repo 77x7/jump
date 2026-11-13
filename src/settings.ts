@@ -54,14 +54,16 @@ type ThemeSlots = { lightTheme: ThemeId; darkTheme: ThemeId };
  * slot (its light counterpart fills the other).
  */
 function migrateThemeSlots(value: Record<string, unknown>): ThemeSlots {
-  const hasLight = "lightTheme" in value;
-  const hasDark = "darkTheme" in value;
-  if (hasLight || hasDark) {
-    return {
-      lightTheme: parseThemeId(value.lightTheme, DEFAULT_SETTINGS.lightTheme),
-      darkTheme: parseThemeId(value.darkTheme, DEFAULT_SETTINGS.darkTheme),
-    };
-  }
+  // A slot that was never written (sync storage saves only changed keys) still
+  // comes from the legacy `theme`, so changing one slot keeps the other.
+  const legacy = legacyThemeSlots(value);
+  return {
+    lightTheme: "lightTheme" in value ? parseThemeId(value.lightTheme, legacy.lightTheme) : legacy.lightTheme,
+    darkTheme: "darkTheme" in value ? parseThemeId(value.darkTheme, legacy.darkTheme) : legacy.darkTheme,
+  };
+}
+
+function legacyThemeSlots(value: Record<string, unknown>): ThemeSlots {
   if (!("theme" in value)) {
     return { lightTheme: DEFAULT_SETTINGS.lightTheme, darkTheme: DEFAULT_SETTINGS.darkTheme };
   }
