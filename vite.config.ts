@@ -52,6 +52,7 @@ export default defineConfig(({ mode }) => {
       input: contentBuild ? resolve(projectRoot, contentEntry.input) : {
         app: resolve(projectRoot, "index.html"),
         popup: resolve(projectRoot, "popup.html"),
+        palette: resolve(projectRoot, "palette.html"),
       },
       output: contentBuild ? {
         format: "iife",

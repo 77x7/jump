@@ -494,15 +494,71 @@ async function getBookmarks(): Promise<BookmarkItem[]> {
   return flattenBookmarks(tree).sort((a, b) => (b.dateAdded ?? 0) - (a.dateAdded ?? 0));
 }
 
+type OpenMessage = Extract<BrowserMessage, { type: "open-palette" }>;
+
+// Chrome does not let extensions draw on its own pages (New Tab, Settings,
+// Extensions, the Web Store, ...). There the palette opens in the toolbar
+// popup (palette.html) instead, so the shortcut works on every page.
+let palettePopupPort: chrome.runtime.Port | undefined;
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "palette-popup") return;
+  palettePopupPort = port;
+  port.onDisconnect.addListener(() => {
+    if (palettePopupPort === port) palettePopupPort = undefined;
+  });
+});
+
+// Pages a content script can run on. Others go straight to the popup instead
+// of waiting for a message and an injection that are bound to fail.
+function canHostPalette(tab: chrome.tabs.Tab) {
+  if (!tab.url) return false;
+  // This extension's own pages (index.html) show the palette themselves.
+  if (tab.url.startsWith(chrome.runtime.getURL(""))) return true;
+  try {
+    const url = new URL(tab.url);
+    if (url.hostname === "chromewebstore.google.com" || (url.hostname === "chrome.google.com" && url.pathname.startsWith("/webstore"))) return false;
+    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "file:";
+  } catch {
+    return false;
+  }
+}
+
+async function openInToolbarPopup(message: OpenMessage) {
+  const params = new URLSearchParams({ mode: message.mode ?? "search" });
+  if (message.activeTabId !== undefined) params.set("activeTabId", String(message.activeTabId));
+  try {
+    await chrome.action.setPopup({ popup: `palette.html?${params}` });
+    await chrome.action.openPopup();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    // The toolbar button keeps opening the settings.
+    await chrome.action.setPopup({ popup: "popup.html" }).catch(() => undefined);
+  }
+}
+
+// Shows the palette in the active tab, or in the toolbar popup where the tab
+// cannot host it. A palette already open in the popup takes the message.
+async function openPaletteIn(tab: chrome.tabs.Tab, message: OpenMessage) {
+  if (palettePopupPort) {
+    palettePopupPort.postMessage(message);
+    return;
+  }
+  if (canHostPalette(tab)) {
+    if (tab.id !== undefined) overlayTabIds.add(tab.id);
+    if (await sendToTab(tab, message, { inject: true })) return;
+    if (tab.id !== undefined) overlayTabIds.delete(tab.id);
+  }
+  await openInToolbarPopup(message);
+}
+
 async function openSearchPalette() {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab) return;
-
   // Search mode does not need a fresh screenshot. Open it immediately and let
   // the switcher own screenshot capture, so the command never feels delayed.
-  if (tab.id !== undefined) overlayTabIds.add(tab.id);
-  const opened = await sendToTab(tab, { type: "open-palette", mode: "search", ...(await openPaletteData()) }, { inject: true });
-  if (!opened && tab.id !== undefined) overlayTabIds.delete(tab.id);
+  await openPaletteIn(tab, { type: "open-palette", mode: "search", ...(await openPaletteData()) });
 }
 
 let switcherOpenInFlight = false;
@@ -520,17 +576,15 @@ async function openTabSwitcher() {
     // of queued for delivery after Alt is released. The message carries only
     // the active tab's preview stamp; the palette fetches the image when the
     // one it holds is older.
-    if (tab.id !== undefined) overlayTabIds.add(tab.id);
     await previewIndexReady;
     const activePreview = tab.id !== undefined ? previewIndex.get(tab.id) : undefined;
-    const opened = await sendToTab(tab, {
+    await openPaletteIn(tab, {
       type: "open-palette",
       mode: "switcher",
       activeTabId: tab.id,
       ...(activePreview && activePreview.url === tab.url ? { activePreviewAt: activePreview.capturedAt } : {}),
       ...(await openPaletteData()),
-    }, { inject: true });
-    if (!opened && tab.id !== undefined) overlayTabIds.delete(tab.id);
+    });
   } finally {
     switcherOpenInFlight = false;
   }
@@ -541,7 +595,9 @@ chrome.commands.onCommand.addListener((command) => {
   if (command === "open-tab-switcher") void openTabSwitcher();
   if (command === "pin-tab") void sendToActiveTab({ type: "request-pin-selected-tab" });
   if (command === "open-bookmarks") {
-    void openPaletteData().then((data) => sendToActiveTab({ type: "open-palette", mode: "bookmarks", ...data }, { inject: true }));
+    void chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([tab]) => {
+      if (tab) await openPaletteIn(tab, { type: "open-palette", mode: "bookmarks", ...(await openPaletteData()) });
+    });
   }
 });
 
