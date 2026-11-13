@@ -1904,17 +1904,25 @@ kbd {
    settings as the overlay; only placement differs. The popup sizes itself to
    its content (Chrome caps popups at 800x600), so the palette sits in normal
    flow with fixed sizes instead of viewport-relative ones (the viewport is the
-   popup, sized by this content). There is no page behind it, so the theme's
-   canvas stands in for one, with room around the card for its rounded
-   corners. */
+   popup, sized by this content). Chrome draws popups as opaque rectangles,
+   so the palette fills the popup exactly: the popup window is its frame (no
+   margin, rounding, border or shadow of its own, which would need something
+   behind them). With no page behind it, the theme's canvas backs it. */
 :host(.palette-popup) {
   display: block;
 }
 
 :host(.palette-popup) .palette-backdrop {
   position: static;
-  padding: 12px;
+  padding: 0;
   background: var(--bg-canvas);
+}
+
+:host(.palette-popup) .palette-card,
+:host(.palette-popup) .switcher-hud {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* The overlay's backdrop fades out to reveal the page; here it stands in for
