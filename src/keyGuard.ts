@@ -9,6 +9,7 @@
  * T3 Code) never see or steal them.
  */
 import { paletteGuardState } from "./paletteGuardState";
+import { WARM_MODIFIERS_KEY, completesShortcutModifiers, parseStoredModifierSets, type ModifierSet } from "./shortcutWarm";
 
 const state = paletteGuardState();
 
@@ -135,3 +136,36 @@ function handlePageEvent(event: Event) {
 for (const type of FORWARDED_EVENT_TYPES) {
   window.addEventListener(type, handlePageEvent, { capture: true });
 }
+
+// Warm-up: the palette is injected on first open, which costs ~27 ms. The
+// modifiers of the user's own shortcuts (read from chrome.commands by the
+// background) go down before the last key, so ask for the palette then and
+// it is usually ready in time.
+let warmRequested = false;
+let warmModifierSets: ModifierSet[] = [];
+
+try {
+  void chrome.storage.local.get(WARM_MODIFIERS_KEY).then((stored) => {
+    warmModifierSets = parseStoredModifierSets(stored[WARM_MODIFIERS_KEY]);
+  }, () => undefined);
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === "local" && WARM_MODIFIERS_KEY in changes) {
+      warmModifierSets = parseStoredModifierSets(changes[WARM_MODIFIERS_KEY].newValue);
+    }
+  });
+} catch {
+  // Extension context gone; the next open injects normally.
+}
+
+function warmOnModifier(event: KeyboardEvent) {
+  if (warmRequested || state.paletteLoaded) return;
+  if (!completesShortcutModifiers(event, warmModifierSets)) return;
+  warmRequested = true;
+  try {
+    void chrome.runtime.sendMessage({ type: "warm-palette" }).catch(() => undefined);
+  } catch {
+    // Extension reloaded under this page; the next open injects normally.
+  }
+}
+
+window.addEventListener("keydown", warmOnModifier, { capture: true, passive: true });

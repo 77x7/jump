@@ -1,3 +1,4 @@
+import { PALETTE_COMMANDS, WARM_MODIFIERS_KEY, parseShortcutModifiers, uniqueModifierSets } from "./shortcutWarm";
 import { parsePreviewEntries, retainOpenTabPreviews, type PreviewEntry } from "./previewCache";
 import { getStoredSettings, pinnedTabIdentity, saveStoredSettings } from "./settings";
 import type { BookmarkItem, BrowserMessage, PaletteTab } from "./types";
@@ -154,18 +155,60 @@ async function capturePreview(tabId: number, windowId: number) {
 // guard, so they share state.
 const PALETTE_SCRIPT = "assets/content.js";
 
-async function injectPalette(tabId: number) {
+// One injection per tab at a time: an open that arrives while a warm-up
+// injection is still running waits for it instead of evaluating the bundle twice.
+const pendingInjections = new Map<number, Promise<boolean>>();
+
+function injectPalette(tabId: number) {
+  const pending = pendingInjections.get(tabId);
+  if (pending) return pending;
+  const injection = chrome.scripting.executeScript({ target: { tabId }, files: [PALETTE_SCRIPT] })
+    .then(() => true, () => false) // Browser-owned pages (chrome://, the Web Store) cannot host the palette.
+    .finally(() => pendingInjections.delete(tabId));
+  pendingInjections.set(tabId, injection);
+  return injection;
+}
+
+async function paletteLoaded(tabId: number) {
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: [PALETTE_SCRIPT] });
+    // Any listener in the tab means the palette bundle is there.
+    await chrome.tabs.sendMessage(tabId, { type: "warm-palette" });
     return true;
   } catch {
-    // Browser-owned pages (chrome://, the Web Store) cannot host the palette.
     return false;
   }
 }
 
+// Publish the modifier sets of the user's palette shortcuts for the keyboard
+// guard. Shortcuts are user-defined, so they are read, never assumed.
+async function publishWarmModifiers() {
+  try {
+    const commands = await chrome.commands.getAll();
+    const sets = uniqueModifierSets(commands
+      .filter((command) => command.name !== undefined && PALETTE_COMMANDS.has(command.name))
+      .map((command) => parseShortcutModifiers(command.shortcut)));
+    await chrome.storage.local.set({ [WARM_MODIFIERS_KEY]: sets });
+  } catch {
+    // Warm-up is optional; opening still injects on demand.
+  }
+}
+
+void publishWarmModifiers();
+chrome.runtime.onInstalled.addListener(() => void publishWarmModifiers());
+chrome.runtime.onStartup.addListener(() => void publishWarmModifiers());
+// Shortcut changes at chrome://extensions/shortcuts (Chrome 108+).
+(chrome.commands as typeof chrome.commands & { onChanged?: chrome.events.Event<() => void> })
+  .onChanged?.addListener(() => void publishWarmModifiers());
+
+async function warmPalette(tabId: number) {
+  if (pendingInjections.has(tabId) || (await paletteLoaded(tabId))) return;
+  await injectPalette(tabId);
+}
+
 async function sendToTab(tab: chrome.tabs.Tab, message: BrowserMessage, { inject = false } = {}) {
   if (tab.id === undefined) return false;
+  // A warm-up injection may be in flight from the shortcut's modifier keys.
+  await pendingInjections.get(tab.id);
   try {
     await chrome.tabs.sendMessage(tab.id, message);
     return true;
@@ -393,6 +436,8 @@ async function openTabSwitcher() {
 }
 
 chrome.commands.onCommand.addListener((command) => {
+  // Cheap catch-all for shortcut changes the onChanged event missed.
+  void publishWarmModifiers();
   if (command === "open-palette") void openSearchPalette();
   if (command === "open-tab-switcher") void openTabSwitcher();
   if (command === "pin-tab") void sendToActiveTab({ type: "request-pin-selected-tab" });
@@ -402,6 +447,11 @@ chrome.commands.onCommand.addListener((command) => {
 chrome.action.onClicked.addListener(() => void openSearchPalette());
 
 chrome.runtime.onMessage.addListener((message: BrowserMessage, sender, sendResponse) => {
+  if (message.type === "warm-palette") {
+    if (sender.tab?.id !== undefined && sender.frameId === 0) void warmPalette(sender.tab.id);
+    return false;
+  }
+
   if (message.type === "palette-opened") {
     if (sender.tab?.id !== undefined) overlayTabIds.add(sender.tab.id);
     return false;
