@@ -7,7 +7,9 @@ import { contrastRatio } from "../src/appearance.ts";
 import { COLOR_THEMES } from "../src/themes.ts";
 
 const stylesPath = resolve(dirname(fileURLToPath(import.meta.url)), "../src/styles.css");
-const css = readFileSync(stylesPath, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+const popupPath = resolve(dirname(fileURLToPath(import.meta.url)), "../src/popup/popup.css");
+// Theme blocks live in styles.css; the popup's own sheet uses the same tokens.
+const css = `${readFileSync(stylesPath, "utf8")}\n${readFileSync(popupPath, "utf8")}`.replace(/\/\*[\s\S]*?\*\//g, "");
 
 // Tokens the overlays/popup must be able to read from the theme block itself.
 // `--surface-*` opacity scaffolding is set inline per overlay, and the `*-fill`

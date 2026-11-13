@@ -11,6 +11,17 @@ let host: HTMLDivElement | undefined;
 // or stealing palette keystrokes while these fields are set.
 const guardState = paletteGuardState();
 
+// Parsed once per page and shared by every palette shadow root, instead of a
+// <style> element whose text is re-parsed on each open.
+let paletteSheet: CSSStyleSheet | undefined;
+function paletteStyles() {
+  if (!paletteSheet) {
+    paletteSheet = new CSSStyleSheet();
+    paletteSheet.replaceSync(cssText);
+  }
+  return paletteSheet;
+}
+
 function appendHost(hostElement: HTMLDivElement) {
   const parent = document.documentElement ?? document.body;
   if (parent) {
@@ -44,9 +55,7 @@ function openPalette(message: Extract<BrowserMessage, { type: "open-palette" }> 
   hostElement.style.cssText = "position:fixed;inset:0;z-index:2147483647;pointer-events:none;";
 
   const shadow = hostElement.attachShadow({ mode: "closed" });
-  const style = document.createElement("style");
-  style.textContent = cssText;
-  shadow.append(style);
+  shadow.adoptedStyleSheets = [paletteStyles()];
   const point = document.createElement("div");
   shadow.append(point);
   shadow.addEventListener("focusin", (focusEvent) => {
