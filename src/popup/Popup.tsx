@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { openShortcutSettings } from "../browser";
-import { CommandIcon, ArrowUpRightIcon, InfoIcon } from "../icons";
+import { CommandIcon, ArrowUpRightIcon, ChevronDownIcon, InfoIcon } from "../icons";
 import { DEFAULT_SETTINGS, MAX_PALETTE_BLUR, getStoredSettings, saveStoredSettings, themesForScheme } from "../settings";
 import { THEMES } from "../themes";
 import { THEME_TOKENS, buildThemesFile, cleanThemeName, importThemes, isCustomThemeId, MAX_CUSTOM_THEMES, newCustomThemeId } from "../themeLibrary";
@@ -234,6 +234,8 @@ export function Popup() {
     void updateSettings({ themeOverrides: withUpdatedOverrides(appearance.themeId, {}) });
   };
 
+  const anyColorOverridden = THEME_TOKENS.some((token) => isTokenOverridden(token));
+
   const textContrast = shownColors ? contrastRatio(shownColors.text, shownColors.background) : MIN_CONTRAST;
   const selectedContrast = shownColors ? contrastRatio(shownColors.selectedRowText, shownColors.selectedRow) : MIN_CONTRAST;
   const contrastWarnings = [
@@ -328,7 +330,7 @@ export function Popup() {
     }
   };
 
-  const renderThemeSelect = (scheme: ColorScheme, label: string) => {
+  const renderThemeSelect = (scheme: ColorScheme, label: string, hideLabel = false) => {
     const presets = presetOptions(scheme);
     const groups = groupByFamily(presets);
     const customs = settings.customThemes.filter((theme) => theme.scheme === scheme);
@@ -336,7 +338,7 @@ export function Popup() {
     const hasValue = presets.some((option) => option.id === value) || customs.some((theme) => theme.id === value);
     return (
       <label className="popup-theme-select-wrap">
-        <span className="popup-field-label">{label}</span>
+        <span className={hideLabel ? "sr-only" : "popup-field-label"}>{label}</span>
         <select
           className="popup-theme-select"
           value={hasValue ? value : ""}
@@ -394,6 +396,37 @@ export function Popup() {
         </div>
       </header>
 
+      <section className="popup-section popup-preview-section" aria-label="Preview">
+        <div
+          className="popup-preview"
+          aria-hidden="true"
+          style={{
+            "--surface-alpha": settings.paletteOpacity,
+            "--surface-blur": `${settings.paletteBlur}px`,
+          } as CSSProperties}
+        >
+          <div className="popup-preview-page">
+            <span className="popup-preview-block is-a" />
+            <span className="popup-preview-block is-b" />
+            <span className="popup-preview-block is-c" />
+            <span className="popup-preview-line" />
+            <span className="popup-preview-line is-short" />
+            <span className="popup-preview-line" />
+          </div>
+          <div className="popup-preview-panel">
+            <div className="popup-preview-search">Search tabs or the web</div>
+            <div className="popup-preview-row is-selected">
+              <span>GitHub</span>
+              <span className="popup-preview-meta">Current tab</span>
+            </div>
+            <div className="popup-preview-row">
+              <span>Calendar</span>
+              <span className="popup-preview-meta">Switch to tab</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="popup-section" aria-labelledby="appearance-label">
         <div className="popup-section-heading">
           <span id="appearance-label">Appearance</span>
@@ -427,172 +460,210 @@ export function Popup() {
             {renderThemeSelect("light", "Light theme")}
           </div>
         ) : (
-          renderThemeSelect(settings.colorScheme, "Theme")
+          renderThemeSelect(settings.colorScheme, "Theme", true)
         )}
+      </section>
+
+      <section className="popup-section" aria-labelledby="background-label">
+        <div className="popup-section-heading">
+          <span id="background-label">Panel background</span>
+          <span className="popup-section-context">Palette and switcher</span>
+        </div>
+        <div className="popup-slider-list">
+          <label className="popup-slider">
+            <span className="popup-slider-head">
+              <span>Opacity</span>
+              <output>{Math.round(settings.paletteOpacity * 100)}%</output>
+            </span>
+            <input
+              className="popup-range"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={settings.paletteOpacity}
+              onChange={(event) => void updateSetting("paletteOpacity", Number(event.target.value))}
+            />
+          </label>
+          <label className="popup-slider">
+            <span className="popup-slider-head">
+              <span>Blur</span>
+              <output>{Math.round(settings.paletteBlur)} px</output>
+            </span>
+            <input
+              className="popup-range"
+              type="range"
+              min="0"
+              max={MAX_PALETTE_BLUR}
+              step="1"
+              value={settings.paletteBlur}
+              onChange={(event) => void updateSetting("paletteBlur", Number(event.target.value))}
+            />
+          </label>
+        </div>
       </section>
 
       <section className="popup-section popup-colors" aria-labelledby="colors-label">
-        <div className="popup-section-heading">
-          <span id="colors-label">Colors</span>
-          <span className="popup-section-context">{themeOptionLabel(appearance.themeId, settings.customThemes)}</span>
-        </div>
-        <div className="popup-color-list">
-          {THEME_TOKENS.map((token) => (
-            <div key={token} className="popup-color-row">
-              <span className="popup-color-label">{TOKEN_LABELS[token]}</span>
-              <input
-                className="popup-color-input"
-                type="color"
-                value={shownColors?.[token] ?? "#000000"}
-                aria-label={`${TOKEN_LABELS[token]} color`}
-                onChange={(event) => setTokenColor(token, event.target.value)}
-              />
-              {isTokenOverridden(token) && (
-                <button
-                  type="button"
-                  className="popup-color-reset"
-                  aria-label={`Reset ${TOKEN_LABELS[token]}`}
-                  title={`Reset ${TOKEN_LABELS[token]}`}
-                  onClick={() => resetTokenColor(token)}
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {contrastWarnings.length > 0 && (
-          <p className="popup-contrast-warning" role="alert">
-            <InfoIcon size={13} />
-            <span>{contrastWarnings.join(". ")}. Aim for {MIN_CONTRAST}:1 or higher.</span>
-          </p>
-        )}
-        <div className="popup-color-actions">
-          <button type="button" className="popup-mini-btn" onClick={resetAllColors}>Reset all</button>
-          <button type="button" className="popup-mini-btn" onClick={startNamingTheme}>Save as theme…</button>
-        </div>
-        {isNamingTheme && (
-          <div className="popup-inline-form">
-            <input
-              className="popup-text-input"
-              type="text"
-              value={themeName}
-              maxLength={40}
-              placeholder="Theme name"
-              aria-label="New theme name"
-              onChange={(event) => setThemeName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") saveAsTheme();
-                if (event.key === "Escape") setIsNamingTheme(false);
-              }}
-            />
-            <button type="button" className="popup-mini-btn is-primary" onClick={saveAsTheme}>Save</button>
-            <button type="button" className="popup-mini-btn" onClick={() => setIsNamingTheme(false)}>Cancel</button>
-          </div>
-        )}
-        {customThemes.length > 0 && (
-          <ul className="popup-custom-list">
-            {customThemes.map((theme) => (
-              <li key={theme.id} className="popup-custom-row">
-                {renamingId === theme.id ? (
-                  <>
-                    <input
-                      className="popup-text-input"
-                      type="text"
-                      value={renameValue}
-                      maxLength={40}
-                      aria-label={`Rename ${theme.name}`}
-                      onChange={(event) => setRenameValue(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") renameTheme(theme.id);
-                        if (event.key === "Escape") setRenamingId(null);
-                      }}
-                    />
-                    <button type="button" className="popup-mini-btn is-primary" onClick={() => renameTheme(theme.id)}>Save</button>
-                    <button type="button" className="popup-mini-btn" onClick={() => setRenamingId(null)}>Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <span className="popup-custom-name" title={theme.name}>{theme.name}</span>
-                    <span className="popup-custom-badge">{theme.scheme === "light" ? "Light" : "Dark"}</span>
+        <details className="popup-disclosure">
+          <summary className="popup-disclosure-summary">
+            <span className="popup-disclosure-title">
+              <span id="colors-label">Customize colors</span>
+              <span className="popup-section-context">
+                {anyColorOverridden ? "Edited · " : ""}{themeOptionLabel(appearance.themeId, settings.customThemes)}
+              </span>
+            </span>
+            <span className="popup-swatch-strip" aria-hidden="true">
+              {THEME_TOKENS.map((token) => (
+                <span key={token} className="popup-swatch-dot" style={{ background: shownColors?.[token] }} />
+              ))}
+              <ChevronDownIcon size={14} className="popup-disclosure-chevron" />
+            </span>
+          </summary>
+          <div className="popup-disclosure-body">
+            <ul className="popup-color-list">
+              {THEME_TOKENS.map((token) => (
+                <li key={token} className="popup-color-row">
+                  <input
+                    className="popup-color-input"
+                    type="color"
+                    value={shownColors?.[token] ?? "#000000"}
+                    aria-label={`${TOKEN_LABELS[token]} color`}
+                    onChange={(event) => setTokenColor(token, event.target.value)}
+                  />
+                  <span className="popup-color-label">{TOKEN_LABELS[token]}</span>
+                  <span className="popup-color-value">{(shownColors?.[token] ?? "").toUpperCase()}</span>
+                  {isTokenOverridden(token) ? (
                     <button
                       type="button"
-                      className="popup-mini-btn"
-                      onClick={() => {
-                        setRenamingId(theme.id);
-                        setRenameValue(theme.name);
-                      }}
+                      className="popup-text-btn"
+                      aria-label={`Reset ${TOKEN_LABELS[token]}`}
+                      onClick={() => resetTokenColor(token)}
                     >
-                      Rename
+                      Reset
                     </button>
-                    <button type="button" className="popup-mini-btn" onClick={() => deleteTheme(theme)}>Delete</button>
-                  </>
+                  ) : <span aria-hidden="true" />}
+                </li>
+              ))}
+            </ul>
+            {contrastWarnings.length > 0 && (
+              <p className="popup-contrast-warning" role="alert">
+                <InfoIcon size={13} />
+                <span>{contrastWarnings.join(". ")}. Aim for {MIN_CONTRAST}:1 or higher.</span>
+              </p>
+            )}
+            {isNamingTheme ? (
+              <div className="popup-inline-form">
+                <input
+                  className="popup-text-input"
+                  type="text"
+                  value={themeName}
+                  maxLength={40}
+                  placeholder="Theme name"
+                  aria-label="New theme name"
+                  autoFocus
+                  onChange={(event) => setThemeName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") saveAsTheme();
+                    if (event.key === "Escape") setIsNamingTheme(false);
+                  }}
+                />
+                <button type="button" className="popup-btn is-primary" onClick={saveAsTheme}>Save</button>
+                <button type="button" className="popup-text-btn" onClick={() => setIsNamingTheme(false)}>Cancel</button>
+              </div>
+            ) : (
+              <div className="popup-color-actions">
+                <button type="button" className="popup-btn" onClick={startNamingTheme}>Save as theme…</button>
+                {anyColorOverridden && (
+                  <button type="button" className="popup-text-btn" onClick={resetAllColors}>Reset all</button>
                 )}
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="popup-color-actions">
-          <button type="button" className="popup-mini-btn" onClick={exportThemes}>Export</button>
-          <button type="button" className="popup-mini-btn" onClick={() => fileInputRef.current?.click()}>Import</button>
-          <input
-            ref={fileInputRef}
-            className="sr-only"
-            type="file"
-            accept="application/json,.json"
-            aria-label="Import themes"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              void importFile(file);
-            }}
-          />
-        </div>
-        {importStatus && (
-          <p className={`popup-import-status ${importStatus.kind === "error" ? "is-error" : ""}`} role="status">
-            {importStatus.message}
-          </p>
-        )}
-      </section>
+              </div>
+            )}
 
-      <section className="popup-section" aria-labelledby="opacity-label">
-        <div className="popup-section-heading">
-          <span id="opacity-label">Opacity</span>
-          <span className="popup-section-context">Panel background</span>
-        </div>
-        <label className="popup-range-row">
-          <span className="sr-only">Panel background opacity</span>
-          <input
-            className="popup-range"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={settings.paletteOpacity}
-            onChange={(event) => void updateSetting("paletteOpacity", Number(event.target.value))}
-          />
-          <output>{Math.round(settings.paletteOpacity * 100)}%</output>
-        </label>
-      </section>
-
-      <section className="popup-section" aria-labelledby="blur-label">
-        <div className="popup-section-heading">
-          <span id="blur-label">Blur</span>
-          <span className="popup-section-context">Panel background</span>
-        </div>
-        <label className="popup-range-row is-stacked">
-          <span className="sr-only">Panel background blur in pixels</span>
-          <input
-            className="popup-range"
-            type="range"
-            min="0"
-            max={MAX_PALETTE_BLUR}
-            step="1"
-            value={settings.paletteBlur}
-            onChange={(event) => void updateSetting("paletteBlur", Number(event.target.value))}
-          />
-          <output>{Math.round(settings.paletteBlur)} px</output>
-        </label>
+            <div className="popup-subsection">
+              <div className="popup-subsection-heading">
+                <span>Saved themes</span>
+                <span className="popup-subsection-actions">
+                  <button type="button" className="popup-text-btn" onClick={exportThemes}>Export</button>
+                  <button type="button" className="popup-text-btn" onClick={() => fileInputRef.current?.click()}>Import</button>
+                </span>
+              </div>
+              <input
+                ref={fileInputRef}
+                className="sr-only"
+                type="file"
+                accept="application/json,.json"
+                aria-label="Import themes"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  void importFile(file);
+                }}
+              />
+              {customThemes.length > 0 ? (
+                <ul className="popup-custom-list">
+                  {customThemes.map((theme) => (
+                    <li key={theme.id} className="popup-custom-row">
+                      {renamingId === theme.id ? (
+                        <>
+                          <input
+                            className="popup-text-input"
+                            type="text"
+                            value={renameValue}
+                            maxLength={40}
+                            aria-label={`Rename ${theme.name}`}
+                            autoFocus
+                            onChange={(event) => setRenameValue(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") renameTheme(theme.id);
+                              if (event.key === "Escape") setRenamingId(null);
+                            }}
+                          />
+                          <button type="button" className="popup-btn is-primary" onClick={() => renameTheme(theme.id)}>Save</button>
+                          <button type="button" className="popup-text-btn" onClick={() => setRenamingId(null)}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="popup-swatch-pair" aria-hidden="true">
+                            <span style={{ background: theme.colors.background ?? THEMES.find((preset) => preset.id === theme.base)?.bg }} />
+                            <span style={{ background: theme.colors.accent ?? THEMES.find((preset) => preset.id === theme.base)?.accent }} />
+                          </span>
+                          <span className="popup-custom-name" title={theme.name}>{theme.name}</span>
+                          <span className="popup-custom-scheme">{theme.scheme === "light" ? "Light" : "Dark"}</span>
+                          <button
+                            type="button"
+                            className="popup-text-btn"
+                            aria-label={`Rename ${theme.name}`}
+                            onClick={() => {
+                              setRenamingId(theme.id);
+                              setRenameValue(theme.name);
+                            }}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            className="popup-text-btn is-danger"
+                            aria-label={`Delete ${theme.name}`}
+                            onClick={() => deleteTheme(theme)}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="popup-empty-note">None yet. Save your colors as a theme, or import a theme file.</p>
+              )}
+              {importStatus && (
+                <p className={`popup-import-status ${importStatus.kind === "error" ? "is-error" : ""}`} role="status">
+                  {importStatus.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </details>
       </section>
 
       <section className="popup-section" aria-labelledby="palette-view-label">
