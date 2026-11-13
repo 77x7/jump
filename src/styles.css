@@ -883,6 +883,13 @@ button {
   display: none;
 }
 
+/* Stands in for the cards outside the rendered window, so the track keeps its
+   full scroll width and every rendered card keeps its exact position. */
+.switcher-spacer {
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
 /* Elevated Switcher Card */
 .switcher-card {
   width: 228px;

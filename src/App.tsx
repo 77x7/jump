@@ -7,6 +7,7 @@ import { buildSearchResults, type SearchResult } from "./paletteSearch";
 import { stalePreviewTabIds } from "./previewCache";
 import { getSearchHistory, recordSearch, type SearchHistoryEntry } from "./searchHistory";
 import { DEFAULT_SETTINGS, getStoredSettings, pinnedTabIdentity, saveStoredSettings, subscribeToSettings } from "./settings";
+import { SWITCHER_ITEM_PITCH, SWITCHER_OVERSCAN, SWITCHER_TRACK_GAP, switcherWindow, switcherWindowKey } from "./switcherWindow";
 import { useResolvedAppearance } from "./appearance";
 import { useEventRoot } from "./eventRoot";
 import { useMountEffect } from "./hooks/useMountEffect";
@@ -604,6 +605,29 @@ export function App({
     : Math.min(selectedIndex, Math.max(0, results.length - 1));
   selectedIndexRef.current = activeIndex;
 
+  // A switcher palette is preloaded in every page, so mounting a card for every
+  // tab costs every page hundreds of nodes and megabytes of heap. Render only
+  // the cards around the selection and the visible scroll area instead; spacers
+  // keep the track's width and every card's position unchanged.
+  const [switcherScroll, setSwitcherScroll] = useState({ left: 0, width: 0 });
+  const [switcherPitch, setSwitcherPitch] = useState(SWITCHER_ITEM_PITCH);
+  const [switcherGap, setSwitcherGap] = useState(SWITCHER_TRACK_GAP);
+  const switcherRange = useMemo(
+    () => isSwitcher
+      ? switcherWindow({
+        count: tabs.length,
+        activeIndex,
+        scrollLeft: switcherScroll.left,
+        viewportWidth: switcherScroll.width,
+        itemWidth: switcherPitch,
+        overscan: SWITCHER_OVERSCAN,
+      })
+      : [],
+    [activeIndex, isSwitcher, switcherPitch, switcherScroll, tabs.length],
+  );
+  const switcherRangeRef = useRef(switcherRange);
+  switcherRangeRef.current = switcherRange;
+
   useLayoutEffect(() => {
     if (isSwitcher && tabs.length > 0) {
       const selectedCard = trackRef.current?.querySelector<HTMLElement>(
@@ -634,6 +658,50 @@ export function App({
       ));
     }
   }, [activeIndex, isGallery, isSwitcher, requestTabPreviews, results, tabs]);
+
+  // Keep the rendered window in step with the track: measure the card pitch
+  // once (card width plus the track's gap), and on scroll widen it only when
+  // the window actually changes, so scrolling costs no render per pixel.
+  useLayoutEffect(() => {
+    if (!isSwitcher) return;
+    const track = trackRef.current;
+    if (!track) return;
+
+    const firstCard = track.querySelector<HTMLElement>("[data-switcher-index]");
+    const gap = Number.parseFloat(getComputedStyle(track).columnGap) || SWITCHER_TRACK_GAP;
+    const measuredCardWidth = firstCard?.offsetWidth ?? 0;
+    const pitch = measuredCardWidth > 0 ? measuredCardWidth + gap : SWITCHER_ITEM_PITCH;
+    if (Math.abs(pitch - switcherPitch) >= 0.5) setSwitcherPitch(pitch);
+    if (Math.abs(gap - switcherGap) >= 0.5) setSwitcherGap(gap);
+
+    // The visible width matters even before a scroll: it decides the window.
+    const syncViewport = () => {
+      const width = track.clientWidth;
+      setSwitcherScroll((current) => (current.width === width && current.left === track.scrollLeft
+        ? current
+        : { left: track.scrollLeft, width }));
+    };
+    syncViewport();
+
+    const handleScroll = () => {
+      const next = switcherWindow({
+        count: tabs.length,
+        activeIndex,
+        scrollLeft: track.scrollLeft,
+        viewportWidth: track.clientWidth,
+        itemWidth: pitch,
+        overscan: SWITCHER_OVERSCAN,
+      });
+      if (switcherWindowKey(next) === switcherWindowKey(switcherRangeRef.current)) return;
+      setSwitcherScroll({ left: track.scrollLeft, width: track.clientWidth });
+    };
+    track.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", syncViewport);
+    return () => {
+      track.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", syncViewport);
+    };
+  }, [activeIndex, isSwitcher, switcherGap, switcherPitch, tabs.length]);
 
   const autocompleteFocusedSuggestion = useCallback(() => {
     const result = results[activeIndex];
@@ -913,6 +981,7 @@ export function App({
 
   // Visual Horizontal Switcher Mode (Alt + Q)
   if (isSwitcher) {
+    const spacerWidth = (cards: number) => `${cards * switcherPitch - switcherGap}px`;
     return (
       <div
         className={`palette-backdrop switcher-backdrop ${isClosing ? "is-closing" : ""}`}
@@ -940,18 +1009,35 @@ export function App({
                 <span>No open tabs</span>
               </div>
             ) : (
-              tabs.map((tab, index) => (
-                <SwitcherCard
-                  key={`switcher-${tab.windowId}-${tab.id}`}
-                  tab={tab}
-                  index={index}
-                  isSelected={index === activeIndex}
-                  previewUrl={previewUrls[String(tab.id)]}
-                  onClick={settings.disableMouseTabSwitcher ? undefined : () => void switchTab(tab)}
-                  onMouseEnter={settings.disableMouseTabSwitcher ? undefined : () => setSelectedIndex(index)}
-                  onToggleMute={settings.disableMouseTabSwitcher ? undefined : () => void muteTab(tab)}
-                />
-              ))
+              <>
+                {switcherRange.flatMap((range, rangeIndex) => {
+                  const gapBefore = range.start - (rangeIndex === 0 ? 0 : switcherRange[rangeIndex - 1].end);
+                  return [
+                    ...(gapBefore > 0
+                      ? [<div key={`spacer-${range.start}`} className="switcher-spacer" aria-hidden="true" style={{ width: spacerWidth(gapBefore) }} />]
+                      : []),
+                    ...tabs.slice(range.start, range.end).map((tab, offset) => {
+                      const index = range.start + offset;
+                      return (
+                        <SwitcherCard
+                          key={`switcher-${tab.windowId}-${tab.id}`}
+                          tab={tab}
+                          index={index}
+                          isSelected={index === activeIndex}
+                          setSize={tabs.length}
+                          previewUrl={previewUrls[String(tab.id)]}
+                          onClick={settings.disableMouseTabSwitcher ? undefined : () => void switchTab(tab)}
+                          onMouseEnter={settings.disableMouseTabSwitcher ? undefined : () => setSelectedIndex(index)}
+                          onToggleMute={settings.disableMouseTabSwitcher ? undefined : () => void muteTab(tab)}
+                        />
+                      );
+                    }),
+                  ];
+                })}
+                {(switcherRange.at(-1)?.end ?? 0) < tabs.length && (
+                  <div key="spacer-end" className="switcher-spacer" aria-hidden="true" style={{ width: spacerWidth(tabs.length - (switcherRange.at(-1)?.end ?? 0)) }} />
+                )}
+              </>
             )}
           </div>
         </div>
