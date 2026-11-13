@@ -500,9 +500,14 @@ type OpenMessage = Extract<BrowserMessage, { type: "open-palette" }>;
 // Extensions, the Web Store, ...). There the palette opens in the toolbar
 // popup (palette.html) instead, so the shortcut works on every page.
 let palettePopupPort: chrome.runtime.Port | undefined;
+// The open message for a popup that is opening. Like the overlay, the popup
+// renders from it, so its first frame already has the tab list and settings.
+let pendingPopupMessage: OpenMessage | undefined;
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "palette-popup") return;
   palettePopupPort = port;
+  if (pendingPopupMessage) port.postMessage(pendingPopupMessage);
+  pendingPopupMessage = undefined;
   port.onDisconnect.addListener(() => {
     if (palettePopupPort === port) palettePopupPort = undefined;
   });
@@ -524,13 +529,13 @@ function canHostPalette(tab: chrome.tabs.Tab) {
 }
 
 async function openInToolbarPopup(message: OpenMessage) {
-  const params = new URLSearchParams({ mode: message.mode ?? "search" });
-  if (message.activeTabId !== undefined) params.set("activeTabId", String(message.activeTabId));
+  pendingPopupMessage = message;
   try {
-    await chrome.action.setPopup({ popup: `palette.html?${params}` });
+    await chrome.action.setPopup({ popup: "palette.html" });
     await chrome.action.openPopup();
     return true;
   } catch {
+    pendingPopupMessage = undefined;
     return false;
   } finally {
     // The toolbar button keeps opening the settings.

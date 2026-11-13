@@ -3,7 +3,7 @@ import { App } from "./App";
 import { EventRootContext } from "./eventRoot";
 import { paletteGuardState } from "./paletteGuardState";
 import type { BrowserMessage } from "./types";
-import cssText from "./styles.css?inline";
+import { paletteStyles } from "./paletteStyles";
 
 type OpenMessage = Extract<BrowserMessage, { type: "open-palette" }>;
 type PaletteMode = NonNullable<OpenMessage["mode"]>;
@@ -33,16 +33,6 @@ const STANDBY_MODES: PaletteMode[] = ["search", "switcher"];
 const guardState = paletteGuardState();
 const standby = new Map<PaletteMode, Palette>();
 let active: Palette | undefined;
-
-// Parsed once per page and shared by every palette shadow root.
-let paletteSheet: CSSStyleSheet | undefined;
-function paletteStyles() {
-  if (!paletteSheet) {
-    paletteSheet = new CSSStyleSheet();
-    paletteSheet.replaceSync(cssText);
-  }
-  return paletteSheet;
-}
 
 function render(palette: Palette, message?: OpenMessage) {
   palette.root.render(
