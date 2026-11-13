@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   disableMouseBookmarks: false,
   tabSwitchMode: "recent",
   paletteViewMode: "collapsed",
-  paletteOpacity: 1,
+  paletteOpacity: 0.84,
   paletteBlur: 40,
   pinnedTabs: [],
   palettePosition: { x: 0.5, y: 0.28 },
