@@ -55,6 +55,8 @@ export function App({
   const requestedPreviewUrls = useRef(new Map<number, string>());
   const previewRequestSequence = useRef(0);
   const previewRequestVersions = useRef(new Map<number, number>());
+  // capturedAt of the preview shown for each tab, to tell when it is outdated.
+  const previewStamps = useRef(new Map<number, number>());
   const [isDraggingPalette, setIsDraggingPalette] = useState(false);
   const [isPaletteDragReady, setIsPaletteDragReady] = useState(false);
   const paletteDragModifierRef = useRef(false);
@@ -184,7 +186,11 @@ export function App({
           currentTab?.url === requestedUrls.get(numericTabId);
       }));
       if (Object.keys(validPreviews).length > 0) {
-        setPreviewUrls((current) => ({ ...current, ...validPreviews }));
+        Object.entries(validPreviews).forEach(([tabId, preview]) => previewStamps.current.set(Number(tabId), preview.capturedAt));
+        setPreviewUrls((current) => ({
+          ...current,
+          ...Object.fromEntries(Object.entries(validPreviews).map(([tabId, preview]) => [tabId, preview.dataUrl])),
+        }));
       }
       missingTabIds.forEach((tabId) => {
         if (!(String(tabId) in previews) && previewRequestVersions.current.get(tabId) === requestVersion) {
@@ -208,6 +214,7 @@ export function App({
       requestedPreviewIds.current.delete(tabId);
       requestedPreviewUrls.current.delete(tabId);
       previewRequestVersions.current.delete(tabId);
+      previewStamps.current.delete(tabId);
     });
     setPreviewUrls((current) => {
       const next = { ...current };
@@ -323,10 +330,11 @@ export function App({
         : currentTabs.findIndex((tab) => tab.id === activation.activeTabId);
       const nextIndex = (activeIndex + 1 + currentTabs.length) % currentTabs.length;
       if (nextIndex !== selectedIndexRef.current) setSelectedIndex(nextIndex);
-      // The background captured this tab just before the open: fetch the new
-      // image. The old one (if any) stays until it arrives, so the open itself
-      // renders nothing.
-      if (activation.previewCaptured && activation.activeTabId !== undefined) {
+      // The background holds a newer capture of this tab than the one shown:
+      // fetch it. The old image (if any) stays until it arrives, so the open
+      // itself renders nothing.
+      if (activation.activePreviewAt !== undefined && activation.activeTabId !== undefined &&
+        previewStamps.current.get(activation.activeTabId) !== activation.activePreviewAt) {
         const tabId = activation.activeTabId;
         requestedPreviewIds.current.delete(tabId);
         requestedPreviewUrls.current.delete(tabId);
