@@ -236,7 +236,7 @@ async function main() {
     check("three fixture tabs are open", paletteTabId !== undefined, `tabId=${paletteTabId}`);
 
     // ---------------------------------------------------------------- search
-    await palettePage.click("#heading");
+    // __fixtureReset() blurs the composer, so page focus starts on <body>.
     await palettePage.evaluate(() => window.__fixtureReset());
     await sendOpenPalette(worker, paletteTabId, "search");
     await waitFor("palette mounted", () => paletteMounted(palettePage));
@@ -300,7 +300,7 @@ async function main() {
     // ------------------------------------------------------------------ Enter
     await palettePage.bringToFront();
     await sleep(200);
-    await palettePage.click("#heading");
+    // __fixtureReset() blurs the composer, so page focus starts on <body>.
     await palettePage.evaluate(() => window.__fixtureReset());
     await sendOpenPalette(worker, paletteTabId, "search");
     await waitFor("palette mounted again", () => paletteMounted(palettePage));
@@ -326,7 +326,6 @@ async function main() {
     // -------------------------------------------------------------- switcher
     await palettePage.bringToFront();
     await sleep(400);
-    await palettePage.click("#heading");
     await palettePage.evaluate(() => window.__fixtureReset());
     await sendOpenPalette(worker, paletteTabId, "switcher", paletteTabId);
     await waitFor("switcher mounted", () => paletteMounted(palettePage));
