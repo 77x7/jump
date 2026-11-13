@@ -56,6 +56,8 @@ const context = await chromium.launchPersistentContext(profile, {
 
 try {
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker", { timeout: 30000 }));
+  // Results listed on open, so the hover checks have rows to work with.
+  await worker.evaluate(() => chrome.storage.sync.set({ paletteViewMode: "expanded" }));
   for (const name of ["alpha", "bravo"]) {
     const tab = await context.newPage();
     await tab.goto(`${origin}/${name}`);
@@ -98,6 +100,7 @@ try {
       void browser.send("Target.sendMessageToTarget", { sessionId, message: JSON.stringify({ id, method, params }) });
     });
     const evaluate = async (expression) => (await call("Runtime.evaluate", { expression, returnByValue: true }))?.result?.value;
+    const mouseMove = (x, y) => call("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none", buttons: 0 });
     const press = async (key, text) => {
       await call("Input.dispatchKeyEvent", { type: "keyDown", key, text, windowsVirtualKeyCode: key === "Enter" ? 13 : 0 });
       await call("Input.dispatchKeyEvent", { type: "keyUp", key });
@@ -106,7 +109,7 @@ try {
       const shot = await call("Page.captureScreenshot", { format: "png" });
       if (shot?.data) writeFileSync(path.join(artifactDir, name), Buffer.from(shot.data, "base64"));
     };
-    return { evaluate, press, screenshot };
+    return { evaluate, press, screenshot, mouseMove };
   }
 
   // Search: opens in the popup with the keyboard in the search box.
@@ -116,10 +119,27 @@ try {
   if (searchTarget) {
     const popup = await attach(searchTarget);
     await sleep(500);
-    check("search box has focus", (await popup.evaluate("document.activeElement?.className")) === "search-input");
+    const shadowExpr = "document.querySelector('.palette-popup').shadowRoot";
+    check("search box has focus", (await popup.evaluate(`${shadowExpr}.activeElement?.className`)) === "search-input");
+    check("it renders like the overlay: same shadow root and stylesheet", (await popup.evaluate(`${shadowExpr}.adoptedStyleSheets.length`)) === 1);
+    const selectedRow = () => popup.evaluate(`[...${shadowExpr}.querySelectorAll('[role=option]')].findIndex((row) => row.getAttribute('aria-selected') === 'true')`);
+    // The popup opens under a resting pointer: that must not select a row.
+    // (Sent twice: the first synthetic event can be taken by the popup window.)
+    await popup.mouseMove(300, 140);
+    await popup.mouseMove(300, 140);
+    await sleep(150);
+    check("a resting pointer does not change the selection", (await selectedRow()) === 0, `selected=${await selectedRow()}`);
+    // Into other rows: hovering selects on entering a row.
+    for (const y of [150, 175, 195]) {
+      await popup.mouseMove(300, y);
+      await sleep(60);
+    }
+    check("moving the pointer selects the row under it", (await selectedRow()) > 0, `selected=${await selectedRow()}`);
+    await popup.mouseMove(300, 20);
+    await sleep(60);
     for (const character of "bravo") await popup.press(character, character);
     await sleep(300);
-    check("typing reaches the search box", (await popup.evaluate("document.querySelector('.search-input')?.value")) === "bravo");
+    check("typing reaches the search box", (await popup.evaluate(`${shadowExpr}.querySelector('.search-input')?.value`)) === "bravo");
     await popup.screenshot("popup-search.png");
     await popup.press("Enter");
     const switched = await (async () => {
@@ -142,7 +162,7 @@ try {
   if (switcherTarget) {
     const popup = await attach(switcherTarget);
     await sleep(500);
-    const selected = () => popup.evaluate("Number(document.querySelector('.switcher-card.is-selected')?.getAttribute('data-switcher-index'))");
+    const selected = () => popup.evaluate("Number(document.querySelector('.palette-popup').shadowRoot.querySelector('.switcher-card.is-selected')?.getAttribute('data-switcher-index'))");
     const before = await selected();
     await worker.evaluate(() => chrome.commands.onCommand.dispatch("open-tab-switcher"));
     await sleep(300);

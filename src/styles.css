@@ -1900,62 +1900,62 @@ kbd {
 }
 
 /* The palette in the toolbar popup (palette.html), used on pages Chrome does
-   not let extensions draw on. The palette sits in normal flow here, so the
-   popup sizes itself to it (Chrome caps popups at 800x600). Sizes are fixed
-   rather than viewport-relative: the viewport is the popup, which takes its
-   size from this content. There is no page behind it, so surfaces are opaque. */
-html.palette-popup,
-html.palette-popup body,
-html.palette-popup #root {
-  width: max-content;
-  height: auto;
-  min-height: 0;
-  margin: 0;
+   not let extensions draw on. Same component, stylesheet, animations and user
+   settings as the overlay; only placement differs. The popup sizes itself to
+   its content (Chrome caps popups at 800x600), so the palette sits in normal
+   flow with fixed sizes instead of viewport-relative ones (the viewport is the
+   popup, sized by this content). There is no page behind it, so the theme's
+   canvas stands in for one, with room around the card for its rounded
+   corners. */
+:host(.palette-popup) {
+  display: block;
 }
 
-html.palette-popup .palette-backdrop {
+:host(.palette-popup) .palette-backdrop {
   position: static;
-  background: transparent;
-  --surface-alpha: 1 !important;
-  --surface-blur: 0px !important;
+  padding: 12px;
+  background: var(--bg-canvas);
 }
 
-html.palette-popup .palette-card,
-html.palette-popup .switcher-hud {
-  position: static;
-  transform: none;
+/* The overlay's backdrop fades out to reveal the page; here it stands in for
+   the page, so only the card's own exit animation runs. */
+:host(.palette-popup) .palette-backdrop.is-closing {
   animation: none;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
 }
 
-html.palette-popup .palette-card {
-  width: 720px;
+/* The overlay centres the card with left: 50% and translateX(-50%), which its
+   animations repeat. Positioned relative in a container as wide as the card,
+   the same pair centres it here too, so the animations run unchanged. The
+   user's saved position does not apply inside the popup. */
+:host(.palette-popup) .palette-card {
+  position: relative;
+  left: 50% !important;
+  top: 0 !important;
+  width: 700px;
 }
 
-html.palette-popup .palette-card.is-gallery-view {
+:host(.palette-popup) .palette-card.is-gallery-view {
+  width: 740px;
+}
+
+:host(.palette-popup) .palette-card.bookmark-card {
   width: 760px;
-}
-
-html.palette-popup .palette-card.bookmark-card {
-  width: 800px;
-  height: 560px;
-  max-height: 560px;
-}
-
-html.palette-popup .item-list {
-  max-height: 380px;
-}
-
-html.palette-popup .item-list.gallery-grid {
+  height: 480px;
   max-height: 480px;
 }
 
-html.palette-popup .switcher-hud {
-  max-width: 800px;
+:host(.palette-popup) .item-list {
+  max-height: 380px;
 }
 
-html.palette-popup .switcher-track {
-  max-width: 760px;
+:host(.palette-popup) .item-list.gallery-grid {
+  max-height: 460px;
+}
+
+:host(.palette-popup) .switcher-hud {
+  max-width: 770px;
+}
+
+:host(.palette-popup) .switcher-track {
+  max-width: 730px;
 }

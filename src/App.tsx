@@ -81,6 +81,26 @@ export function App({
   settingsRef.current = settings;
   const appearance = useResolvedAppearance(settings);
   const eventRoot = useEventRoot();
+  // Hovering selects a row only once the pointer has actually moved since the
+  // palette opened: a palette that appears under a resting pointer (the toolbar
+  // popup always does) must keep its first row selected.
+  const pointerMovedRef = useRef(false);
+  const lastPointerRef = useRef<{ x: number; y: number } | undefined>(undefined);
+  useMountEffect(() => {
+    // The first event only records where the pointer rests; a later one at a
+    // different position is a real move.
+    const handlePointerMove = (event: Event) => {
+      if (!(event instanceof PointerEvent)) return;
+      const last = lastPointerRef.current;
+      if (last && (last.x !== event.screenX || last.y !== event.screenY)) pointerMovedRef.current = true;
+      lastPointerRef.current = { x: event.screenX, y: event.screenY };
+    };
+    eventRoot.addEventListener("pointermove", handlePointerMove, { capture: true });
+    return () => eventRoot.removeEventListener("pointermove", handlePointerMove, { capture: true });
+  });
+  const hoverSelect = (index: number) => {
+    if (pointerMovedRef.current) setSelectedIndex(index);
+  };
 
   const isSwitcher = mode === "switcher";
   const isBookmarks = mode === "bookmarks";
@@ -316,6 +336,8 @@ export function App({
   const activate = (activation: Extract<BrowserMessage, { type: "open-palette" }>) => {
     if (!standbyRef.current) return;
     standbyRef.current = false;
+    pointerMovedRef.current = false;
+    lastPointerRef.current = undefined;
     void notifyPaletteOpened().catch(() => undefined);
     if (activation.settings && JSON.stringify(activation.settings) !== JSON.stringify(settingsRef.current)) {
       setSettings(activation.settings);
@@ -1027,7 +1049,7 @@ export function App({
                           setSize={tabs.length}
                           previewUrl={previewUrls[String(tab.id)]}
                           onClick={settings.disableMouseTabSwitcher ? undefined : () => void switchTab(tab)}
-                          onMouseEnter={settings.disableMouseTabSwitcher ? undefined : () => setSelectedIndex(index)}
+                          onMouseEnter={settings.disableMouseTabSwitcher ? undefined : () => hoverSelect(index)}
                           onToggleMute={settings.disableMouseTabSwitcher ? undefined : () => void muteTab(tab)}
                         />
                       );
@@ -1164,7 +1186,7 @@ export function App({
                     isSelected={index === activeIndex}
                     previewUrl={previewUrls[String(result.tab.id)]}
                     onClick={settings.disableMouseCommandPalette ? undefined : () => executeResult(result)}
-                    onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => setSelectedIndex(index)}
+                    onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => hoverSelect(index)}
                     onToggleMute={settings.disableMouseCommandPalette ? undefined : () => void muteTab(result.tab)}
                   />
                 ) : (
@@ -1173,7 +1195,7 @@ export function App({
                     result={result}
                     index={index}
                     isSelected={index === activeIndex}
-                    onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => setSelectedIndex(index)}
+                    onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => hoverSelect(index)}
                     onClick={settings.disableMouseCommandPalette ? undefined : () => executeResult(result)}
                   />
                 ))
@@ -1187,7 +1209,7 @@ export function App({
                         result={result}
                         index={index}
                         isSelected={isSelected}
-                        onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => setSelectedIndex(index)}
+                        onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => hoverSelect(index)}
                         onClick={settings.disableMouseCommandPalette ? undefined : () => executeResult(result)}
                       />
                     );
@@ -1201,7 +1223,7 @@ export function App({
                       className={`list-row ${isSelected ? "selected" : ""}`}
                       role="option"
                       aria-selected={isSelected}
-                      onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => setSelectedIndex(index)}
+                      onMouseEnter={settings.disableMouseCommandPalette ? undefined : () => hoverSelect(index)}
                       onClick={settings.disableMouseCommandPalette ? undefined : () => executeResult(result)}
                     >
                       <div className="list-row-left">
