@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
   // The service worker is one too: Chrome starts it for most opens (it stops
   // it after 30 s idle), and one classic script starts faster than a module
   // that has to fetch its imported chunks.
-  const contentEntries: Record<string, { input: string; output: string }> = {
+  const contentEntries: Partial<Record<string, { input: string; output: string }>> = {
     content: { input: "src/content.tsx", output: "assets/content.js" },
     keyguard: { input: "src/keyGuard.ts", output: "assets/keyguard.js" },
     background: { input: "src/background.ts", output: "assets/background.js" },
