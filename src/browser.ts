@@ -1,5 +1,5 @@
 import { pinnedTabIdentity } from "./settings";
-import type { BookmarkItem, BrowserMessage, PaletteTab, PinnedTab, TabList } from "./types";
+import type { BookmarkItem, BrowserMessage, PaletteTab, PinnedTab, TabList, TabPreview } from "./types";
 
 export type BrowserHistoryItem = {
   id: string;
@@ -36,7 +36,12 @@ export async function getTabPreviews(tabIds: number[]) {
   } satisfies BrowserMessage);
   if (typeof response !== "object" || response === null) return {};
   return Object.fromEntries(Object.entries(response).filter(
-    (entry): entry is [string, string] => typeof entry[1] === "string",
+    (entry): entry is [string, TabPreview] => {
+      const preview: unknown = entry[1];
+      return typeof preview === "object" && preview !== null &&
+        typeof (preview as TabPreview).dataUrl === "string" &&
+        typeof (preview as TabPreview).capturedAt === "number";
+    },
   ));
 }
 

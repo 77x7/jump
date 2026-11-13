@@ -1,6 +1,6 @@
 import { parsePreviewEntries, retainOpenTabPreviews, type PreviewEntry } from "./previewCache";
 import { getStoredSettings, pinnedTabIdentity, saveStoredSettings } from "./settings";
-import type { BookmarkItem, BrowserMessage, PaletteTab, TabList, UserSettings } from "./types";
+import type { BookmarkItem, BrowserMessage, PaletteTab, TabList, TabPreview, UserSettings } from "./types";
 
 const LEGACY_PREVIEW_CACHE_KEY = "recent-tab-previews";
 const LEGACY_PREVIEW_CACHE_PREFIX = "tab-preview:";
@@ -147,6 +147,40 @@ async function capturePreview(tabId: number, windowId: number) {
     return null;
   }
 }
+
+// Previews are captured ahead of time, while a tab is on screen without the
+// palette: shortly after it becomes active, finishes loading, or the palette
+// closes over it. Opening the switcher then never waits for a capture (one
+// takes ~20 ms), and a capture never shows the palette itself.
+const PREVIEW_SETTLE_MS = 300;
+const previewCaptureTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+function schedulePreviewCapture(windowId: number, delay = PREVIEW_SETTLE_MS) {
+  const pending = previewCaptureTimers.get(windowId);
+  if (pending !== undefined) clearTimeout(pending);
+  previewCaptureTimers.set(windowId, setTimeout(() => {
+    previewCaptureTimers.delete(windowId);
+    // Chrome allows two captures a second; wait out the interval, don't skip.
+    const wait = lastPreviewCaptureStartedAt + PREVIEW_CAPTURE_INTERVAL_MS - Date.now();
+    if (wait > 0) {
+      schedulePreviewCapture(windowId, wait);
+      return;
+    }
+    void chrome.tabs.query({ active: true, windowId }).then(([tab]) => {
+      if (tab?.id === undefined || overlayTabIds.has(tab.id)) return;
+      lastPreviewCaptureStartedAt = Date.now();
+      return capturePreview(tab.id, windowId);
+    }).catch(() => undefined);
+  }, delay));
+}
+
+chrome.tabs.onActivated.addListener(({ windowId }) => schedulePreviewCapture(windowId));
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete" && tab.active) schedulePreviewCapture(tab.windowId);
+});
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId !== chrome.windows.WINDOW_ID_NONE) schedulePreviewCapture(windowId);
+});
 
 // The palette bundle (~330 KB) is not a declared content script: pages only
 // carry the 2 KB keyboard guard, and the palette is injected into a tab the
@@ -444,26 +478,19 @@ async function openTabSwitcher() {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tab) return;
 
-    // Capture only when the active tab has no valid cached preview. The raw
-    // frame is available before compression, and overlapping shortcut events
-    // are dropped instead of queued for delivery after Alt is released.
-    await previewCacheReady;
-    const cachedPreview = tab.id !== undefined ? previewCache.get(tab.id) : undefined;
-    const canCaptureNow = Date.now() - lastPreviewCaptureStartedAt >= PREVIEW_CAPTURE_INTERVAL_MS;
-    let previewCaptured = false;
-    if (tab.id !== undefined && cachedPreview?.url !== tab.url && canCaptureNow) {
-      lastPreviewCaptureStartedAt = Date.now();
-      previewCaptured = (await capturePreview(tab.id, tab.windowId)) !== null;
-    }
-
-    // getTabs supplies every cached preview in one response after mount. Keep
-    // this command message small instead of sending the active image twice.
+    // No capture here: previews are captured ahead of time (see
+    // schedulePreviewCapture). Overlapping shortcut events are dropped instead
+    // of queued for delivery after Alt is released. The message carries only
+    // the active tab's preview stamp; the palette fetches the image when the
+    // one it holds is older.
     if (tab.id !== undefined) overlayTabIds.add(tab.id);
+    await previewCacheReady;
+    const activePreview = tab.id !== undefined ? previewCache.get(tab.id) : undefined;
     const opened = await sendToTab(tab, {
       type: "open-palette",
       mode: "switcher",
       activeTabId: tab.id,
-      previewCaptured,
+      ...(activePreview && activePreview.url === tab.url ? { activePreviewAt: activePreview.capturedAt } : {}),
       ...(await openPaletteData()),
     }, { inject: true });
     if (!opened && tab.id !== undefined) overlayTabIds.delete(tab.id);
@@ -491,6 +518,8 @@ chrome.runtime.onMessage.addListener((message: BrowserMessage, sender, sendRespo
 
   if (message.type === "palette-closed") {
     if (sender.tab?.id !== undefined) overlayTabIds.delete(sender.tab.id);
+    // Refresh the preview once the closing animation has finished.
+    if (sender.tab?.active) schedulePreviewCapture(sender.tab.windowId, 400);
     return false;
   }
 
@@ -511,7 +540,7 @@ chrome.runtime.onMessage.addListener((message: BrowserMessage, sender, sendRespo
     void previewCacheReady.then(() => {
       sendResponse(Object.fromEntries(tabIds.flatMap((tabId) => {
         const preview = previewCache.get(tabId);
-        return preview ? [[String(tabId), preview.dataUrl]] : [];
+        return preview ? [[String(tabId), { dataUrl: preview.dataUrl, capturedAt: preview.capturedAt } satisfies TabPreview]] : [];
       })));
     });
     return true;

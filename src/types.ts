@@ -109,6 +109,9 @@ export type PaletteTab = {
  */
 export type TabList = { tabs: PaletteTab[]; version: string };
 
+/** A tab screenshot; capturedAt identifies the capture. */
+export type TabPreview = { dataUrl: string; capturedAt: number };
+
 export type BrowserMessage =
   | { type: "get-tabs" }
   | { type: "get-tab-previews"; tabIds: number[] }
@@ -129,8 +132,8 @@ export type BrowserMessage =
     /** Identifies `tabs`; equal versions mean an identical list (see TabList). */
     tabsVersion?: string;
     settings?: UserSettings;
-    /** The switcher's background just captured a fresh preview of this tab. */
-    previewCaptured?: boolean;
+    /** capturedAt of the background's preview of the active tab, if any. */
+    activePreviewAt?: number;
   }
   | { type: "cycle-tab-switcher"; direction?: "next" | "prev" }
   | { type: "request-pin-selected-tab" }
