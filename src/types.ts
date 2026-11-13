@@ -15,6 +15,32 @@ export type ColorTheme =
 
 export type ColorScheme = "light" | "dark";
 
+/** Stored appearance preference: a fixed scheme or follow the OS. */
+export type AppearanceScheme = ColorScheme | "auto";
+
+export type ThemeToken =
+  | "accent"
+  | "background"
+  | "text"
+  | "textSecondary"
+  | "border"
+  | "selectedRow"
+  | "selectedRowText";
+
+export type ThemeColors = Partial<Record<ThemeToken, string>>;
+
+export type ThemeId = ColorTheme | `custom-${string}`;
+
+export type CustomTheme = {
+  id: `custom-${string}`;
+  name: string;
+  base: ColorTheme;
+  scheme: ColorScheme;
+  colors: ThemeColors;
+};
+
+export type ThemeOverrides = Record<string, ThemeColors>;
+
 export type ViewMode = "list" | "gallery";
 export type TabSwitchMode = "recent" | "order";
 export type PaletteViewMode = "collapsed" | "expanded";
@@ -35,8 +61,11 @@ export type PinnedTab = {
 
 export type UserSettings = {
   viewMode: ViewMode;
-  theme: ColorTheme;
-  colorScheme: ColorScheme;
+  lightTheme: ThemeId;
+  darkTheme: ThemeId;
+  colorScheme: AppearanceScheme;
+  themeOverrides: ThemeOverrides;
+  customThemes: CustomTheme[];
   disableMouseTabSwitcher: boolean;
   disableMouseCommandPalette: boolean;
   disableMouseBookmarks: boolean;

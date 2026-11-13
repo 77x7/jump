@@ -1,22 +1,60 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { openShortcutSettings } from "../browser";
 import { CommandIcon, ArrowUpRightIcon, InfoIcon } from "../icons";
-import { DEFAULT_SETTINGS, MAX_PALETTE_BLUR, getStoredSettings, saveStoredSettings, themeForScheme, themesForScheme, type ThemeInfo } from "../settings";
-import type { ColorScheme, PaletteViewMode, TabSwitchMode, UserSettings } from "../types";
+import { DEFAULT_SETTINGS, MAX_PALETTE_BLUR, getStoredSettings, saveStoredSettings, themesForScheme } from "../settings";
+import { THEMES } from "../themes";
+import { THEME_TOKENS, buildThemesFile, cleanThemeName, importThemes, isCustomThemeId, MAX_CUSTOM_THEMES, newCustomThemeId } from "../themeLibrary";
+import {
+  TOKEN_PREVIEW_VAR,
+  contrastRatio,
+  resolveColorToken,
+  resolvedThemeColors,
+  useResolvedAppearance,
+} from "../appearance";
+import type { AppearanceScheme, ColorScheme, CustomTheme, PaletteViewMode, TabSwitchMode, ThemeColors, ThemeId, ThemeToken, UserSettings } from "../types";
 import { resolveSettingsRead } from "./settingsState";
 import { useMountEffect } from "../hooks/useMountEffect";
 
-type ThemeGroup = {
-  theme: ThemeInfo;
-  variants: ThemeInfo[];
+const MIN_CONTRAST = 4.5;
+
+const TOKEN_LABELS: Record<ThemeToken, string> = {
+  accent: "Accent",
+  background: "Background",
+  text: "Text",
+  textSecondary: "Secondary text",
+  border: "Border",
+  selectedRow: "Selected row",
+  selectedRowText: "Selected row text",
 };
 
-function groupThemes(themes: ThemeInfo[]): ThemeGroup[] {
-  const groups: ThemeGroup[] = [];
-  for (const theme of themes) {
-    const existing = groups.find((group) => group.theme.name === theme.name);
-    if (existing) existing.variants.push(theme);
-    else groups.push({ theme, variants: [] });
+type ThemeOption = { id: ThemeId; label: string; group: string };
+
+function presetOptions(scheme: ColorScheme): ThemeOption[] {
+  return themesForScheme(scheme).map((theme) => ({
+    id: theme.id,
+    label: theme.name === "Mono" ? `${theme.name} · ${theme.badge}` : `${theme.badge}`,
+    group: theme.name === "Mono" ? "" : theme.name,
+  }));
+}
+
+function themeSlotId(settings: UserSettings, scheme: ColorScheme): ThemeId {
+  return scheme === "light" ? settings.lightTheme : settings.darkTheme;
+}
+
+function themeOptionLabel(themeId: ThemeId, customThemes: CustomTheme[]): string {
+  if (isCustomThemeId(themeId)) return customThemes.find((theme) => theme.id === themeId)?.name ?? themeId;
+  const preset = THEMES.find((theme) => theme.id === themeId);
+  return preset ? `${preset.name} · ${preset.badge}` : themeId;
+}
+
+function groupByFamily(options: ThemeOption[]) {
+  const groups: { name: string; options: ThemeOption[] }[] = [];
+  for (const option of options) {
+    const group = option.group || "";
+    const existing = groups.find((entry) => entry.name === group);
+    if (existing) existing.options.push(option);
+    else if (group) groups.push({ name: group, options: [option] });
+    else groups.unshift({ name: "", options: [option] });
   }
   return groups;
 }
@@ -25,6 +63,14 @@ export function Popup() {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [shortcuts, setShortcuts] = useState<Record<string, string>>({});
   const [shortcutsLoaded, setShortcutsLoaded] = useState(false);
+  const [shownColors, setShownColors] = useState<Record<ThemeToken, string> | null>(null);
+  const [isNamingTheme, setIsNamingTheme] = useState(false);
+  const [themeName, setThemeName] = useState("");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [importStatus, setImportStatus] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
+  const rootRef = useRef<HTMLElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const settingsRevision = useRef(0);
   const isMac = typeof navigator !== "undefined" && navigator.platform.includes("Mac");
   const defaultSearchShortcut = isMac ? "⌘⇧P" : "Ctrl Shift P";
@@ -35,6 +81,12 @@ export function Popup() {
   const version = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version
     ? chrome.runtime.getManifest().version
     : "0.1.7";
+
+  const appearance = useResolvedAppearance(settings);
+  const activeCustom = isCustomThemeId(appearance.themeId)
+    ? settings.customThemes.find((theme) => theme.id === appearance.themeId)
+    : undefined;
+  const activeOverrides: ThemeColors = settings.themeOverrides[appearance.themeId] ?? {};
 
   useMountEffect(() => {
     const readRevision = settingsRevision.current;
@@ -64,6 +116,20 @@ export function Popup() {
       // since we cannot verify which keys are actually assigned.
     });
   });
+
+  // Read the effective colours back out of the rendered theme block so the
+  // pickers start from what is actually on screen (including rgba tokens).
+  useLayoutEffect(() => {
+    const element = rootRef.current;
+    if (!element || typeof getComputedStyle !== "function") return;
+    const computed = getComputedStyle(element);
+    const panel = computed.getPropertyValue(TOKEN_PREVIEW_VAR.background).trim() || "#000000";
+    const next = {} as Record<ThemeToken, string>;
+    for (const token of THEME_TOKENS) {
+      next[token] = resolveColorToken(computed.getPropertyValue(TOKEN_PREVIEW_VAR[token]).trim() || panel, panel);
+    }
+    setShownColors(next);
+  }, [appearance, settings.customThemes, settings.themeOverrides]);
 
   const shortcutRows = [
     { label: "Search tabs", command: "open-palette" as const, fallback: defaultSearchShortcut },
@@ -104,17 +170,215 @@ export function Popup() {
     await updateSettings({ [key]: value });
   };
 
-  const visibleThemes = themesForScheme(settings.colorScheme);
-  const themeGroups = groupThemes(visibleThemes);
-  const chooseScheme = (scheme: ColorScheme) => {
+  const chooseScheme = (scheme: AppearanceScheme) => {
+    void updateSetting("colorScheme", scheme);
+  };
+
+  const chooseTheme = (scheme: ColorScheme, themeId: ThemeId) => {
+    void updateSetting(scheme === "light" ? "lightTheme" : "darkTheme", themeId);
+  };
+
+  const isTokenOverridden = (token: ThemeToken) => {
+    if (activeCustom && token in activeCustom.colors) return true;
+    return token in activeOverrides;
+  };
+
+  const withUpdatedOverrides = (themeId: string, nextColors: ThemeColors): Record<string, ThemeColors> => {
+    const next = { ...settings.themeOverrides };
+    if (Object.keys(nextColors).length === 0) delete next[themeId];
+    else next[themeId] = nextColors;
+    return next;
+  };
+
+  const setTokenColor = (token: ThemeToken, value: string) => {
+    const color = value.toLowerCase();
+    if (activeCustom) {
+      void updateSettings({
+        customThemes: settings.customThemes.map((theme) => theme.id === activeCustom.id
+          ? { ...theme, colors: { ...theme.colors, [token]: color } }
+          : theme),
+      });
+      return;
+    }
     void updateSettings({
-      colorScheme: scheme,
-      theme: themeForScheme(settings.theme, scheme),
+      themeOverrides: withUpdatedOverrides(appearance.themeId, {
+        ...activeOverrides,
+        [token]: color,
+      }),
     });
   };
 
+  const resetTokenColor = (token: ThemeToken) => {
+    const nextOverrides = { ...activeOverrides };
+    delete nextOverrides[token];
+    if (activeCustom) {
+      const colors = { ...activeCustom.colors };
+      delete colors[token];
+      void updateSettings({
+        customThemes: settings.customThemes.map((theme) => theme.id === activeCustom.id ? { ...theme, colors } : theme),
+        themeOverrides: withUpdatedOverrides(activeCustom.id, nextOverrides),
+      });
+      return;
+    }
+    void updateSettings({ themeOverrides: withUpdatedOverrides(appearance.themeId, nextOverrides) });
+  };
+
+  const resetAllColors = () => {
+    if (activeCustom) {
+      void updateSettings({
+        customThemes: settings.customThemes.map((theme) => theme.id === activeCustom.id ? { ...theme, colors: {} } : theme),
+        themeOverrides: withUpdatedOverrides(activeCustom.id, {}),
+      });
+      return;
+    }
+    void updateSettings({ themeOverrides: withUpdatedOverrides(appearance.themeId, {}) });
+  };
+
+  const textContrast = shownColors ? contrastRatio(shownColors.text, shownColors.background) : MIN_CONTRAST;
+  const selectedContrast = shownColors ? contrastRatio(shownColors.selectedRowText, shownColors.selectedRow) : MIN_CONTRAST;
+  const contrastWarnings = [
+    textContrast < MIN_CONTRAST
+      ? `Text on background is ${textContrast.toFixed(1)}:1`
+      : null,
+    selectedContrast < MIN_CONTRAST
+      ? `Selected row text is ${selectedContrast.toFixed(1)}:1`
+      : null,
+  ].filter((entry): entry is string => entry !== null);
+
+  const startNamingTheme = () => {
+    setThemeName(activeCustom ? `${activeCustom.name} copy` : `${themeOptionLabel(appearance.themeId, settings.customThemes)} copy`);
+    setIsNamingTheme(true);
+  };
+
+  const saveAsTheme = () => {
+    const name = cleanThemeName(themeName);
+    if (!name) return;
+    const colors = resolvedThemeColors(settings.customThemes, settings.themeOverrides, appearance.themeId);
+    const id = newCustomThemeId(settings.customThemes.map((theme) => theme.id));
+    const theme: CustomTheme = {
+      id,
+      name,
+      base: appearance.baseTheme,
+      scheme: appearance.scheme,
+      colors,
+    };
+    const customThemes = [...settings.customThemes, theme].slice(0, MAX_CUSTOM_THEMES);
+    const selectTheme: Partial<UserSettings> = appearance.scheme === "light"
+      ? { lightTheme: theme.id }
+      : { darkTheme: theme.id };
+    void updateSettings({ customThemes, ...selectTheme });
+    setIsNamingTheme(false);
+    setThemeName("");
+  };
+
+  const renameTheme = (id: string) => {
+    const name = cleanThemeName(renameValue);
+    if (!name) return;
+    void updateSetting("customThemes", settings.customThemes.map((theme) => theme.id === id ? { ...theme, name } : theme));
+    setRenamingId(null);
+    setRenameValue("");
+  };
+
+  const deleteTheme = (theme: CustomTheme) => {
+    const nextOverrides = { ...settings.themeOverrides };
+    delete nextOverrides[theme.id];
+    void updateSettings({
+      customThemes: settings.customThemes.filter((entry) => entry.id !== theme.id),
+      themeOverrides: nextOverrides,
+      ...(settings.lightTheme === theme.id ? { lightTheme: theme.base } : {}),
+      ...(settings.darkTheme === theme.id ? { darkTheme: theme.base } : {}),
+    });
+    setImportStatus(null);
+  };
+
+  const exportThemes = () => {
+    const payload = JSON.stringify(buildThemesFile(settings.customThemes, settings.themeOverrides), null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "jump-themes.json";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const importFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const result = importThemes(text, {
+        customThemes: settings.customThemes,
+        themeOverrides: settings.themeOverrides,
+      });
+      await updateSettings({
+        customThemes: result.customThemes,
+        themeOverrides: result.themeOverrides,
+      });
+      setImportStatus({
+        kind: "ok",
+        message: result.importedCount === 1 ? "Imported 1 theme." : `Imported ${result.importedCount} themes.`,
+      });
+    } catch (error) {
+      setImportStatus({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Could not import that file.",
+      });
+    }
+  };
+
+  const renderThemeSelect = (scheme: ColorScheme, label: string) => {
+    const presets = presetOptions(scheme);
+    const groups = groupByFamily(presets);
+    const customs = settings.customThemes.filter((theme) => theme.scheme === scheme);
+    const value = themeSlotId(settings, scheme);
+    const hasValue = presets.some((option) => option.id === value) || customs.some((theme) => theme.id === value);
+    return (
+      <label className="popup-theme-select-wrap">
+        <span className="popup-field-label">{label}</span>
+        <select
+          className="popup-theme-select"
+          value={hasValue ? value : ""}
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next) chooseTheme(scheme, next as ThemeId);
+          }}
+        >
+          {!hasValue && <option value="">Choose a theme…</option>}
+          {groups.map((group) => group.name === "" ? (
+            group.options.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))
+          ) : (
+            <optgroup key={group.name} label={group.name}>
+              {group.options.map((option) => (
+                <option key={option.id} value={option.id}>{option.label}</option>
+              ))}
+            </optgroup>
+          ))}
+          {customs.length > 0 && (
+            <optgroup label="Custom">
+              {customs.map((theme) => (
+                <option key={theme.id} value={theme.id}>{theme.name}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </label>
+    );
+  };
+
+  const customThemes = settings.customThemes;
+
   return (
-    <main className="popup-container" data-theme={settings.theme} data-scheme={settings.colorScheme}>
+    <main
+      className="popup-container"
+      ref={rootRef}
+      data-theme={appearance.baseTheme}
+      data-scheme={appearance.scheme}
+      style={appearance.cssVars}
+    >
       <header className="popup-header">
         <div className="popup-brand">
           <span className="popup-mark" aria-hidden="true">
@@ -133,10 +397,10 @@ export function Popup() {
       <section className="popup-section" aria-labelledby="appearance-label">
         <div className="popup-section-heading">
           <span id="appearance-label">Appearance</span>
-          <span className="popup-section-context">Light or dark</span>
+          <span className="popup-section-context">Light, dark or system</span>
         </div>
-        <div className="popup-segmented" role="group" aria-label="Color scheme">
-          {(["dark", "light"] as const satisfies readonly ColorScheme[]).map((scheme) => (
+        <div className="popup-segmented is-triple" role="group" aria-label="Color scheme">
+          {(["light", "dark", "auto"] as const satisfies readonly AppearanceScheme[]).map((scheme) => (
             <button
               key={scheme}
               type="button"
@@ -144,7 +408,7 @@ export function Popup() {
               aria-pressed={settings.colorScheme === scheme}
               onClick={() => chooseScheme(scheme)}
             >
-              <span>{scheme === "dark" ? "Dark" : "Light"}</span>
+              <span>{scheme === "dark" ? "Dark" : scheme === "light" ? "Light" : "Auto"}</span>
             </button>
           ))}
         </div>
@@ -153,29 +417,142 @@ export function Popup() {
       <section className="popup-section" aria-labelledby="theme-label">
         <div className="popup-section-heading">
           <span id="theme-label">Theme</span>
-          <span className="popup-section-context">{settings.colorScheme === "light" ? "Light palettes" : "Dark palettes"}</span>
+          <span className="popup-section-context">
+            {settings.colorScheme === "auto" ? "Follows system" : settings.colorScheme === "light" ? "Light palettes" : "Dark palettes"}
+          </span>
         </div>
-        <label className="popup-theme-select-wrap">
-          <span className="sr-only">Choose a theme</span>
-          <select
-            className="popup-theme-select"
-            value={settings.theme}
-            onChange={(event) => {
-              const theme = visibleThemes.find((item) => item.id === event.target.value)?.id;
-              if (theme) void updateSetting("theme", theme);
-            }}
-          >
-            {themeGroups.map((group) => group.variants.length === 0 ? (
-              <option key={group.theme.id} value={group.theme.id}>{group.theme.name} · {group.theme.badge}</option>
-            ) : (
-              <optgroup key={group.theme.name} label={group.theme.name}>
-                {[group.theme, ...group.variants].map((theme) => (
-                  <option key={theme.id} value={theme.id}>{theme.badge}</option>
-                ))}
-              </optgroup>
+        {settings.colorScheme === "auto" ? (
+          <div className="popup-theme-stack">
+            {renderThemeSelect("dark", "Dark theme")}
+            {renderThemeSelect("light", "Light theme")}
+          </div>
+        ) : (
+          renderThemeSelect(settings.colorScheme, "Theme")
+        )}
+      </section>
+
+      <section className="popup-section popup-colors" aria-labelledby="colors-label">
+        <div className="popup-section-heading">
+          <span id="colors-label">Colors</span>
+          <span className="popup-section-context">{themeOptionLabel(appearance.themeId, settings.customThemes)}</span>
+        </div>
+        <div className="popup-color-list">
+          {THEME_TOKENS.map((token) => (
+            <div key={token} className="popup-color-row">
+              <span className="popup-color-label">{TOKEN_LABELS[token]}</span>
+              <input
+                className="popup-color-input"
+                type="color"
+                value={shownColors?.[token] ?? "#000000"}
+                aria-label={`${TOKEN_LABELS[token]} color`}
+                onChange={(event) => setTokenColor(token, event.target.value)}
+              />
+              {isTokenOverridden(token) && (
+                <button
+                  type="button"
+                  className="popup-color-reset"
+                  aria-label={`Reset ${TOKEN_LABELS[token]}`}
+                  title={`Reset ${TOKEN_LABELS[token]}`}
+                  onClick={() => resetTokenColor(token)}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {contrastWarnings.length > 0 && (
+          <p className="popup-contrast-warning" role="alert">
+            <InfoIcon size={13} />
+            <span>{contrastWarnings.join(". ")}. Aim for {MIN_CONTRAST}:1 or higher.</span>
+          </p>
+        )}
+        <div className="popup-color-actions">
+          <button type="button" className="popup-mini-btn" onClick={resetAllColors}>Reset all</button>
+          <button type="button" className="popup-mini-btn" onClick={startNamingTheme}>Save as theme…</button>
+        </div>
+        {isNamingTheme && (
+          <div className="popup-inline-form">
+            <input
+              className="popup-text-input"
+              type="text"
+              value={themeName}
+              maxLength={40}
+              placeholder="Theme name"
+              aria-label="New theme name"
+              onChange={(event) => setThemeName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") saveAsTheme();
+                if (event.key === "Escape") setIsNamingTheme(false);
+              }}
+            />
+            <button type="button" className="popup-mini-btn is-primary" onClick={saveAsTheme}>Save</button>
+            <button type="button" className="popup-mini-btn" onClick={() => setIsNamingTheme(false)}>Cancel</button>
+          </div>
+        )}
+        {customThemes.length > 0 && (
+          <ul className="popup-custom-list">
+            {customThemes.map((theme) => (
+              <li key={theme.id} className="popup-custom-row">
+                {renamingId === theme.id ? (
+                  <>
+                    <input
+                      className="popup-text-input"
+                      type="text"
+                      value={renameValue}
+                      maxLength={40}
+                      aria-label={`Rename ${theme.name}`}
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") renameTheme(theme.id);
+                        if (event.key === "Escape") setRenamingId(null);
+                      }}
+                    />
+                    <button type="button" className="popup-mini-btn is-primary" onClick={() => renameTheme(theme.id)}>Save</button>
+                    <button type="button" className="popup-mini-btn" onClick={() => setRenamingId(null)}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="popup-custom-name" title={theme.name}>{theme.name}</span>
+                    <span className="popup-custom-badge">{theme.scheme === "light" ? "Light" : "Dark"}</span>
+                    <button
+                      type="button"
+                      className="popup-mini-btn"
+                      onClick={() => {
+                        setRenamingId(theme.id);
+                        setRenameValue(theme.name);
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button type="button" className="popup-mini-btn" onClick={() => deleteTheme(theme)}>Delete</button>
+                  </>
+                )}
+              </li>
             ))}
-          </select>
-        </label>
+          </ul>
+        )}
+        <div className="popup-color-actions">
+          <button type="button" className="popup-mini-btn" onClick={exportThemes}>Export</button>
+          <button type="button" className="popup-mini-btn" onClick={() => fileInputRef.current?.click()}>Import</button>
+          <input
+            ref={fileInputRef}
+            className="sr-only"
+            type="file"
+            accept="application/json,.json"
+            aria-label="Import themes"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              void importFile(file);
+            }}
+          />
+        </div>
+        {importStatus && (
+          <p className={`popup-import-status ${importStatus.kind === "error" ? "is-error" : ""}`} role="status">
+            {importStatus.message}
+          </p>
+        )}
       </section>
 
       <section className="popup-section" aria-labelledby="opacity-label">

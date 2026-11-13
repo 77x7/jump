@@ -1,16 +1,25 @@
 import { StrictMode, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import type { BrowserMessage } from "./types";
+import type { BrowserMessage, UserSettings } from "./types";
 import { useMountEffect } from "./hooks/useMountEffect";
+import { DEFAULT_SETTINGS, getStoredSettings, subscribeToSettings } from "./settings";
+import { useResolvedAppearance } from "./appearance";
 import "./styles.css";
 
 function NewTabPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<"search" | "switcher" | "bookmarks">("search");
   const [activeTabId, setActiveTabId] = useState<number | undefined>();
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const isOpenRef = useRef(isOpen);
   isOpenRef.current = isOpen;
+  const appearance = useResolvedAppearance(settings);
+
+  useMountEffect(() => {
+    void getStoredSettings().then(setSettings).catch(() => undefined);
+    return subscribeToSettings(setSettings);
+  });
 
   useMountEffect(() => {
     const handleMessage = (message: BrowserMessage) => {
@@ -50,7 +59,14 @@ function NewTabPage() {
   });
 
   if (!isOpen) {
-    return <div className="newtab-canvas" />;
+    return (
+      <div
+        className="newtab-canvas"
+        data-theme={appearance.baseTheme}
+        data-scheme={appearance.scheme}
+        style={appearance.cssVars}
+      />
+    );
   }
 
   return (
@@ -68,6 +84,3 @@ createRoot(document.getElementById("root")!).render(
     <NewTabPage />
   </StrictMode>,
 );
-
-
-
