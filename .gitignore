@@ -3,3 +3,4 @@ dist
 *.zip
 .firecrawl
 .DS_Store
+tests/e2e/shots/

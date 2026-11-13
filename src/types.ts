@@ -43,6 +43,7 @@ export type UserSettings = {
   tabSwitchMode: TabSwitchMode;
   paletteViewMode: PaletteViewMode;
   paletteOpacity: number;
+  paletteBlur: number;
   pinnedTabs: PinnedTab[];
   palettePosition: PalettePosition;
 };
