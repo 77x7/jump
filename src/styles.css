@@ -12,6 +12,15 @@
   }
 }
 
+/* A standby palette (built ahead, off-screen) holds its entry animations at
+   their first frame; removing the class only resumes them, so revealing
+   creates no animations. Only the elements that animate in are listed, so
+   revealing restyles just them. */
+:host(.jump-standby) .switcher-hud,
+:host(.jump-standby) .empty-state {
+  animation-play-state: paused;
+}
+
 @layer components {
 
 html, body {

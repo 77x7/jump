@@ -31,6 +31,15 @@
         "assets/keyguard.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "assets/content.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "background": {

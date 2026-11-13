@@ -1,5 +1,5 @@
 import { pinnedTabIdentity } from "./settings";
-import type { BookmarkItem, BrowserMessage, PaletteTab, PinnedTab } from "./types";
+import type { BookmarkItem, BrowserMessage, PaletteTab, PinnedTab, TabList } from "./types";
 
 export type BrowserHistoryItem = {
   id: string;
@@ -9,7 +9,7 @@ export type BrowserHistoryItem = {
   lastVisitTime?: number;
 };
 
-export async function getTabs(): Promise<PaletteTab[]> {
+export async function getTabs(): Promise<TabList> {
   return chrome.runtime.sendMessage({ type: "get-tabs" } satisfies BrowserMessage);
 }
 

@@ -20,14 +20,28 @@ export function App({
   initialMode = "search",
   initialActiveTabId,
   initialTabs,
+  initialTabsVersion,
   initialSettings,
+  startInStandby = false,
+  activateRef,
+  openHandlerRef,
 }: {
   onClose: () => void;
   initialMode?: "search" | "switcher" | "bookmarks";
   initialActiveTabId?: number;
   /** Tab list and settings sent with the open, so the first render is complete. */
   initialTabs?: PaletteTab[];
+  initialTabsVersion?: string;
   initialSettings?: UserSettings;
+  /**
+   * In-page palette only: rendered ahead of time, hidden and inert, so an open
+   * only reveals it. The content script reveals it by calling activateRef,
+   * which renders nothing unless the data sent with the open has changed.
+   */
+  startInStandby?: boolean;
+  activateRef?: { current?: (message: Extract<BrowserMessage, { type: "open-palette" }>) => void };
+  /** Set by the content script, which then routes open messages here. */
+  openHandlerRef?: { current?: (message: Extract<BrowserMessage, { type: "open-palette" }>) => void };
 }) {
   const [tabs, setTabs] = useState<PaletteTab[]>(initialTabs ?? []);
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
@@ -91,11 +105,36 @@ export function App({
   tabsRef.current = tabs;
   modeRef.current = mode;
   const tabsRequestIdRef = useRef(0);
+  const tabsVersionRef = useRef(initialTabsVersion);
+  // A ref, not state: revealing must not re-render the palette.
+  const standbyRef = useRef(startInStandby);
 
+  // Opened/closed bookkeeping (the background skips preview captures of a tab
+  // showing the palette) covers only the time the palette is shown.
   useMountEffect(() => {
-    void notifyPaletteOpened().catch(() => undefined);
+    if (!standbyRef.current) void notifyPaletteOpened().catch(() => undefined);
     return () => {
-      void notifyPaletteClosed().catch(() => undefined);
+      if (!standbyRef.current) void notifyPaletteClosed().catch(() => undefined);
+    };
+  });
+
+  // A standby palette in a page gets no tab events (content scripts have no
+  // chrome.tabs), so refresh its list when the page comes back into view, once
+  // right away and once after the background has seen the tab switch.
+  useMountEffect(() => {
+    if (!standbyRef.current) return;
+    const timers: number[] = [];
+    const handleVisible = () => {
+      if (!standbyRef.current || document.visibilityState !== "visible") return;
+      void refreshTabsRef.current();
+      timers.push(window.setTimeout(() => void refreshTabsRef.current(), 150));
+    };
+    document.addEventListener("visibilitychange", handleVisible);
+    window.addEventListener("focus", handleVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisible);
+      window.removeEventListener("focus", handleVisible);
+      timers.forEach((timer) => window.clearTimeout(timer));
     };
   });
 
@@ -220,14 +259,21 @@ export function App({
     const requestId = tabsRequestIdRef.current + 1;
     tabsRequestIdRef.current = requestId;
     try {
-      const tabList = await getTabs();
+      const { tabs: tabList, version } = await getTabs();
       if (requestId !== tabsRequestIdRef.current) return;
       // Usually identical to the list sent with the open: skip a re-render.
-      if (JSON.stringify(tabList) === JSON.stringify(tabsRef.current)) return;
+      if (version && version === tabsVersionRef.current) return;
+      tabsVersionRef.current = version;
       const staleTabIds = stalePreviewTabIds(tabsRef.current, tabList);
       invalidateTabPreviews(staleTabIds);
       tabsRef.current = tabList;
       setTabs(tabList);
+      // A standby switcher pre-selects the tab after this one (the tab that is
+      // active and focused when the page is in view), as an open would.
+      if (standbyRef.current && modeRef.current === "switcher" && tabList.length > 0) {
+        const selfIndex = tabList.findIndex((tab) => tab.active && tab.windowFocused);
+        setSelectedIndex((selfIndex + 1 + tabList.length) % tabList.length);
+      }
       if (isSwitcher && initialSwitcherSelectionPending.current && tabList.length > 0) {
         const activeIndex = initialActiveTabId === undefined
           ? -1
@@ -244,10 +290,53 @@ export function App({
   // Keep focus inside the palette. The switcher has no input, so focusing its
   // container keeps keystrokes out of the page (and off the page's own
   // "type anywhere" focus handlers) while keyboard navigation runs.
-  useEffect(() => {
-    if (mode === "switcher") switcherRef.current?.focus();
-    else if (mode === "search") inputRef.current?.focus();
-  }, [mode]);
+  const focusForMode = useCallback(() => {
+    if (modeRef.current === "switcher") switcherRef.current?.focus({ preventScroll: true });
+    else if (modeRef.current === "search") inputRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!standbyRef.current) focusForMode();
+  }, [mode, focusForMode]);
+
+  // Reveal a standby palette: bring it up to date with the data sent with the
+  // open and focus it. It is normally current already, so nothing re-renders.
+  const activate = (activation: Extract<BrowserMessage, { type: "open-palette" }>) => {
+    if (!standbyRef.current) return;
+    standbyRef.current = false;
+    void notifyPaletteOpened().catch(() => undefined);
+    if (activation.settings && JSON.stringify(activation.settings) !== JSON.stringify(settingsRef.current)) {
+      setSettings(activation.settings);
+      if (modeRef.current === "search") setIsExpanded(activation.settings.paletteViewMode === "expanded");
+    }
+    let currentTabs = tabsRef.current;
+    if (activation.tabs && !(activation.tabsVersion && activation.tabsVersion === tabsVersionRef.current)) {
+      tabsVersionRef.current = activation.tabsVersion;
+      invalidateTabPreviews(stalePreviewTabIds(currentTabs, activation.tabs));
+      currentTabs = activation.tabs;
+      tabsRef.current = currentTabs;
+      setTabs(currentTabs);
+    }
+    if (modeRef.current === "switcher" && currentTabs.length > 0) {
+      const activeIndex = activation.activeTabId === undefined
+        ? -1
+        : currentTabs.findIndex((tab) => tab.id === activation.activeTabId);
+      const nextIndex = (activeIndex + 1 + currentTabs.length) % currentTabs.length;
+      if (nextIndex !== selectedIndexRef.current) setSelectedIndex(nextIndex);
+      // The background captured this tab just before the open: fetch the new
+      // image. The old one (if any) stays until it arrives, so the open itself
+      // renders nothing.
+      if (activation.previewCaptured && activation.activeTabId !== undefined) {
+        const tabId = activation.activeTabId;
+        requestedPreviewIds.current.delete(tabId);
+        requestedPreviewUrls.current.delete(tabId);
+        previewRequestVersions.current.delete(tabId);
+        requestTabPreviews([tabId]);
+      }
+    }
+    focusForMode();
+  };
+  if (activateRef) activateRef.current = activate;
 
   useMountEffect(() => {
     void refreshTabsRef.current();
@@ -283,9 +372,9 @@ export function App({
 
   // Unified message listener for both in-page overlay and new tab page
   useMountEffect(() => {
-    const handleMessage = (message: BrowserMessage) => {
-      if (isClosingRef.current) return;
-      if (message.type === "open-palette") {
+    const handleOpenMessage = (message: Extract<BrowserMessage, { type: "open-palette" }>) => {
+      if (isClosingRef.current || standbyRef.current) return;
+      {
         if (message.mode === "bookmarks") {
           setMode("bookmarks");
           setIsExpanded(false);
@@ -307,6 +396,15 @@ export function App({
           setIsExpanded(settingsRef.current.paletteViewMode === "expanded");
           setTimeout(() => inputRef.current?.focus(), 50);
         }
+      }
+    };
+    if (openHandlerRef) openHandlerRef.current = handleOpenMessage;
+
+    const handleMessage = (message: BrowserMessage) => {
+      if (isClosingRef.current || standbyRef.current) return;
+      if (message.type === "open-palette") {
+        // In a page the content script routes opens (see openHandlerRef).
+        if (!openHandlerRef) handleOpenMessage(message);
       } else if (message.type === "cycle-tab-switcher") {
         setSelectedIndex((curr) => {
           const currentTabs = tabsRef.current;

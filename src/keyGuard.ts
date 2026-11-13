@@ -123,6 +123,15 @@ function handlePageEvent(event: Event) {
   // Clipboard events must keep their native behaviour; only hide them from the page.
   if (CLIPBOARD_EVENT_TYPES.has(event.type)) return;
 
+  // Focus moves inside the palette are only recorded (for refocusing after a
+  // page steals focus), not re-dispatched: the palette has no focus handlers.
+  if (event.type === "focusin") {
+    const focused = shadowRoot.activeElement;
+    if (focused instanceof HTMLElement) state.lastFocus = focused;
+    return;
+  }
+  if (event.type === "focusout") return;
+
   const forwarded = cloneForwardedEvent(event);
   if (!forwarded) return;
   const target = shadowRoot.activeElement ?? mountPoint;

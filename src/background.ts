@@ -1,6 +1,6 @@
 import { parsePreviewEntries, retainOpenTabPreviews, type PreviewEntry } from "./previewCache";
 import { getStoredSettings, pinnedTabIdentity, saveStoredSettings } from "./settings";
-import type { BookmarkItem, BrowserMessage, PaletteTab, UserSettings } from "./types";
+import type { BookmarkItem, BrowserMessage, PaletteTab, TabList, UserSettings } from "./types";
 
 const LEGACY_PREVIEW_CACHE_KEY = "recent-tab-previews";
 const LEGACY_PREVIEW_CACHE_PREFIX = "tab-preview:";
@@ -227,7 +227,13 @@ async function sendToActiveTab(message: BrowserMessage, options?: { inject?: boo
 // tabs instead of waiting for two round trips. Both are rebuilt when they
 // change; a service worker that was asleep rebuilds them on first use.
 let settingsCache: Promise<UserSettings> | undefined;
-let tabsCache: Promise<PaletteTab[]> | undefined;
+let tabsCache: Promise<TabList> | undefined;
+// Versions are unique across service worker restarts, and a version always
+// stands for one list content: comparing the list here, once per rebuild,
+// spares every page from comparing it on open.
+const tabsVersionPrefix = crypto.randomUUID();
+let tabsVersionCount = 0;
+let lastTabList: { json: string; version: string } | undefined;
 let tabsRebuildTimer: ReturnType<typeof setTimeout> | undefined;
 
 function cachedSettings() {
@@ -239,7 +245,11 @@ function cachedSettings() {
 }
 
 function cachedTabs() {
-  tabsCache ??= getTabs().catch((error: unknown) => {
+  tabsCache ??= getTabs().then((tabs) => {
+    const json = JSON.stringify(tabs);
+    if (lastTabList?.json !== json) lastTabList = { json, version: `${tabsVersionPrefix}:${++tabsVersionCount}` };
+    return { tabs, version: lastTabList.version };
+  }).catch((error: unknown) => {
     tabsCache = undefined;
     throw error;
   });
@@ -280,7 +290,7 @@ async function openPaletteData() {
     cachedTabs().catch(() => undefined),
     cachedSettings().catch(() => undefined),
   ]);
-  return { ...(tabs ? { tabs } : {}), ...(settings ? { settings } : {}) };
+  return { ...(tabs ? { tabs: tabs.tabs, tabsVersion: tabs.version } : {}), ...(settings ? { settings } : {}) };
 }
 
 async function getTabs(): Promise<PaletteTab[]> {
@@ -440,9 +450,10 @@ async function openTabSwitcher() {
     await previewCacheReady;
     const cachedPreview = tab.id !== undefined ? previewCache.get(tab.id) : undefined;
     const canCaptureNow = Date.now() - lastPreviewCaptureStartedAt >= PREVIEW_CAPTURE_INTERVAL_MS;
+    let previewCaptured = false;
     if (tab.id !== undefined && cachedPreview?.url !== tab.url && canCaptureNow) {
       lastPreviewCaptureStartedAt = Date.now();
-      await capturePreview(tab.id, tab.windowId);
+      previewCaptured = (await capturePreview(tab.id, tab.windowId)) !== null;
     }
 
     // getTabs supplies every cached preview in one response after mount. Keep
@@ -452,6 +463,7 @@ async function openTabSwitcher() {
       type: "open-palette",
       mode: "switcher",
       activeTabId: tab.id,
+      previewCaptured,
       ...(await openPaletteData()),
     }, { inject: true });
     if (!opened && tab.id !== undefined) overlayTabIds.delete(tab.id);
@@ -483,7 +495,7 @@ chrome.runtime.onMessage.addListener((message: BrowserMessage, sender, sendRespo
   }
 
   if (message.type === "get-tabs") {
-    void cachedTabs().then(sendResponse, () => sendResponse([]));
+    void cachedTabs().then(sendResponse, () => sendResponse({ tabs: [], version: "" } satisfies TabList));
     return true;
   }
 
