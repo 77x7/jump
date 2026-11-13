@@ -1,0 +1,62 @@
+import { PinIcon } from "../icons";
+import type { PaletteTab } from "../types";
+import { TabFavicon, TabSoundIndicator } from "./TabVisuals";
+
+type CardProps = {
+  tab: PaletteTab;
+  index: number;
+  isSelected: boolean;
+  previewUrl?: string;
+  onClick?: () => void;
+  onMouseEnter?: () => void;
+  onToggleMute?: () => void;
+};
+
+export function SwitcherCard({ tab, isSelected, previewUrl, index, onClick, onMouseEnter, onToggleMute }: CardProps) {
+  const effectivePreview = previewUrl;
+  return (
+    <div data-switcher-index={index} className={`switcher-card ${isSelected ? "is-selected" : ""}`} onClick={onClick} onMouseEnter={onMouseEnter} role="option" aria-selected={isSelected}>
+      <div className="switcher-plate">
+        <div className="switcher-thumbnail">
+          {effectivePreview ? <img src={effectivePreview} alt="" className="switcher-thumbnail-image" loading="eager" decoding="async" /> : (
+            <div className="switcher-placeholder">
+              <div className="switcher-placeholder-icon"><TabFavicon tab={tab} size={32} /></div>
+              <span className="switcher-placeholder-domain">{tab.hostname || "Web Page"}</span>
+            </div>
+          )}
+        </div>
+        <div className="switcher-card-footer">
+          <TabFavicon tab={tab} size={16} />
+          <span className="switcher-card-title">{tab.title}</span>
+          {tab.pinned && <PinIcon className="tab-pinned-icon" size={12} />}
+          <TabSoundIndicator tab={tab} onToggleMute={onToggleMute} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function GalleryCard({ tab, index, isSelected, previewUrl, onClick, onMouseEnter, onToggleMute }: CardProps) {
+  const effectivePreview = previewUrl;
+  return (
+    <div data-index={index} className={`gallery-card ${isSelected ? "selected" : ""}`} onClick={onClick} onMouseEnter={onMouseEnter} role="option" aria-selected={isSelected}>
+      <div className="gallery-thumbnail">
+        {effectivePreview ? <img src={effectivePreview} alt="" className="gallery-thumbnail-image" loading="eager" decoding="async" /> : (
+          <div className="gallery-placeholder">
+            <TabFavicon tab={tab} size={28} />
+            <span className="gallery-placeholder-domain">{tab.hostname || "Web Page"}</span>
+          </div>
+        )}
+      </div>
+      <div className="gallery-meta">
+        <div className="gallery-meta-left">
+          <TabFavicon tab={tab} size={15} />
+          <span className="gallery-title">{tab.title}</span>
+          {tab.pinned && <PinIcon className="tab-pinned-icon" size={12} />}
+          <TabSoundIndicator tab={tab} onToggleMute={onToggleMute} />
+        </div>
+        {tab.hostname && <span className="gallery-domain">{tab.hostname}</span>}
+      </div>
+    </div>
+  );
+}
