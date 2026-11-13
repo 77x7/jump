@@ -374,6 +374,32 @@ async function main() {
     );
     await palette.detach();
 
+    // ------------------------------------------- new-tab page (window event root)
+    // The new-tab page renders App in a normal document with no shadow root, so
+    // its keyboard handlers must keep working on the default (window) root.
+    const extensionId = new URL(worker.url()).host;
+    const appPage = await context.newPage();
+    await appPage.goto(`chrome-extension://${extensionId}/index.html`);
+    await appPage.bringToFront();
+    await sleep(200);
+    await appPage.keyboard.press("Control+Shift+P");
+    await checkEventually("new-tab page palette opens", () =>
+      appPage.evaluate(() => Boolean(document.querySelector(".search-input"))),
+    );
+    await appPage.keyboard.type("abc");
+    await checkEventually(
+      "new-tab page palette receives keystrokes",
+      async () => {
+        const value = await appPage.evaluate(() => document.querySelector(".search-input")?.value ?? null);
+        return value === "abc" ? "value=abc" : undefined;
+      },
+    );
+    await appPage.keyboard.press("Escape");
+    await appPage.keyboard.press("Escape");
+    await checkEventually("new-tab page palette closes on Escape", async () =>
+      (await appPage.evaluate(() => Boolean(document.querySelector(".search-input")))) === false,
+    );
+
     const failed = checks.filter((entry) => !entry.ok);
     writeFileSync(
       path.join(artifactDir, "last-run.json"),
