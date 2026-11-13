@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 import { copyFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -17,9 +16,20 @@ export default defineConfig(({ mode }) => {
   const contentBuild = contentEntry !== undefined;
 
   return {
+  // Preact runs the React code unchanged and is far lighter: the in-page
+  // palette is injected on first open, and React's ~200 KB took ~28 ms to
+  // load and compile there.
+  resolve: {
+    alias: [
+      { find: /^react-dom\/client$/, replacement: "preact/compat/client" },
+      { find: /^react\/jsx-runtime$/, replacement: "preact/jsx-runtime" },
+      { find: /^react\/jsx-dev-runtime$/, replacement: "preact/jsx-dev-runtime" },
+      { find: /^react-dom$/, replacement: "preact/compat" },
+      { find: /^react$/, replacement: "preact/compat" },
+    ],
+  },
   plugins: [
     react(),
-    tailwindcss(),
     {
       name: "copy-extension-assets",
       closeBundle() {

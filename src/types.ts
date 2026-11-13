@@ -106,7 +106,6 @@ export type BrowserMessage =
   | { type: "get-tabs" }
   | { type: "get-tab-previews"; tabIds: number[] }
   | { type: "palette-opened" }
-  | { type: "warm-palette" }
   | { type: "palette-closed" }
   | { type: "search-history"; query: string; maxResults?: number }
   | { type: "activate-tab"; tab: PaletteTab }

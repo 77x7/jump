@@ -18,14 +18,14 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
+    "preact": "10.29.8",
+    "react": "npm:@preact/compat@^18.3.2",
+    "react-dom": "npm:@preact/compat@^18.3.2",
     "typescript": "latest",
     "vite": "latest"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
     "playwright-core": "1.62.1",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "4.3.3"
   }
 }
