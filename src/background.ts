@@ -148,14 +148,35 @@ async function capturePreview(tabId: number, windowId: number) {
   }
 }
 
-async function sendToTab(tab: chrome.tabs.Tab, message: BrowserMessage) {
+// The palette bundle (~330 KB) is not a declared content script: pages only
+// carry the 2 KB keyboard guard, and the palette is injected into a tab the
+// first time it is opened there. It runs in the same isolated world as the
+// guard, so they share state.
+const PALETTE_SCRIPT = "assets/content.js";
+
+async function injectPalette(tabId: number) {
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: [PALETTE_SCRIPT] });
+    return true;
+  } catch {
+    // Browser-owned pages (chrome://, the Web Store) cannot host the palette.
+    return false;
+  }
+}
+
+async function sendToTab(tab: chrome.tabs.Tab, message: BrowserMessage, { inject = false } = {}) {
   if (tab.id === undefined) return false;
   try {
     await chrome.tabs.sendMessage(tab.id, message);
     return true;
   } catch {
-    // Content scripts run declaratively on regular web pages. Browser-owned
-    // pages and tabs opened before an extension reload cannot host the palette.
+    // No palette in this tab yet ("Receiving end does not exist").
+  }
+  if (!inject || !(await injectPalette(tab.id))) return false;
+  try {
+    await chrome.tabs.sendMessage(tab.id, message);
+    return true;
+  } catch {
     return false;
   }
 }
@@ -190,9 +211,9 @@ function searchHistory(query: string, maxResults: number) {
   return request.then((items) => items.slice(0, maxResults));
 }
 
-async function sendToActiveTab(message: BrowserMessage) {
+async function sendToActiveTab(message: BrowserMessage, options?: { inject?: boolean }) {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (tab) await sendToTab(tab, message);
+  if (tab) await sendToTab(tab, message, options);
 }
 
 async function getTabs(): Promise<PaletteTab[]> {
@@ -332,7 +353,7 @@ async function openSearchPalette() {
   // Search mode does not need a fresh screenshot. Open it immediately and let
   // the switcher own screenshot capture, so the command never feels delayed.
   if (tab.id !== undefined) overlayTabIds.add(tab.id);
-  const opened = await sendToTab(tab, { type: "open-palette", mode: "search" });
+  const opened = await sendToTab(tab, { type: "open-palette", mode: "search" }, { inject: true });
   if (!opened && tab.id !== undefined) overlayTabIds.delete(tab.id);
 }
 
@@ -364,7 +385,7 @@ async function openTabSwitcher() {
       type: "open-palette",
       mode: "switcher",
       activeTabId: tab.id,
-    });
+    }, { inject: true });
     if (!opened && tab.id !== undefined) overlayTabIds.delete(tab.id);
   } finally {
     switcherOpenInFlight = false;
@@ -375,7 +396,7 @@ chrome.commands.onCommand.addListener((command) => {
   if (command === "open-palette") void openSearchPalette();
   if (command === "open-tab-switcher") void openTabSwitcher();
   if (command === "pin-tab") void sendToActiveTab({ type: "request-pin-selected-tab" });
-  if (command === "open-bookmarks") void sendToActiveTab({ type: "open-palette", mode: "bookmarks" });
+  if (command === "open-bookmarks") void sendToActiveTab({ type: "open-palette", mode: "bookmarks" }, { inject: true });
 });
 
 chrome.action.onClicked.addListener(() => void openSearchPalette());

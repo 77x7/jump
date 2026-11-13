@@ -71,6 +71,11 @@ function openPalette(message: Extract<BrowserMessage, { type: "open-palette" }> 
   );
 }
 
-chrome.runtime.onMessage.addListener((message: BrowserMessage) => {
-  if (message.type === "open-palette") openPalette(message);
-});
+// The background injects this bundle on first open; a second injection (two
+// quick opens) must not add a second listener and mount a second palette.
+if (!guardState.paletteLoaded) {
+  guardState.paletteLoaded = true;
+  chrome.runtime.onMessage.addListener((message: BrowserMessage) => {
+    if (message.type === "open-palette") openPalette(message);
+  });
+}

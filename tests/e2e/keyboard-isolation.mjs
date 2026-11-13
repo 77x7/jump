@@ -188,7 +188,13 @@ async function sendOpenPalette(worker, tabId, mode, activeTabId) {
     async ({ tabId: targetTabId, mode: paletteMode, activeTabId: initialTabId }) => {
       const message = { type: "open-palette", mode: paletteMode };
       if (initialTabId !== undefined) message.activeTabId = initialTabId;
-      await chrome.tabs.sendMessage(targetTabId, message);
+      // Like the background: the palette is injected on first open.
+      try {
+        await chrome.tabs.sendMessage(targetTabId, message);
+      } catch {
+        await chrome.scripting.executeScript({ target: { tabId: targetTabId }, files: ["assets/content.js"] });
+        await chrome.tabs.sendMessage(targetTabId, message);
+      }
     },
     { tabId, mode, activeTabId },
   );

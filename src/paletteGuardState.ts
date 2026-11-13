@@ -14,6 +14,8 @@ export type PaletteGuardState = {
   mountPoint?: HTMLElement;
   /** Last element that held focus inside the palette. */
   lastFocus?: HTMLElement;
+  /** Set once the palette bundle has registered its message listener. */
+  paletteLoaded?: boolean;
 };
 
 const STATE_KEY = "__jumpPaletteGuardState";
