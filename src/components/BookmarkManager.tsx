@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getBookmarks, openBookmark } from "../browser";
 import { BookmarkIcon, ChevronDownIcon, ChevronLeftIcon, CornerDownLeftIcon, GlobeIcon } from "../icons";
+import { activeElementIn, useEventRoot } from "../eventRoot";
 import { useMountEffect } from "../hooks/useMountEffect";
 import { dragPreviewCellForPoint, isAltModifierActive, nextFreeDragPosition, snapPalettePosition } from "../paletteDrag";
 import { saveStoredSettings } from "../settings";
@@ -151,6 +152,7 @@ export function BookmarkManager({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const eventRoot = useEventRoot();
 
   useMountEffect(() => {
     inputRef.current?.focus();
@@ -405,7 +407,8 @@ export function BookmarkManager({
   }, [selectedIndex, filteredBookmarks.length]);
 
   useMountEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: Event) => {
+      if (!(event instanceof KeyboardEvent)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         if (queryRef.current) {
@@ -494,7 +497,7 @@ export function BookmarkManager({
           }
         }
       } else if (event.key === "Home") {
-        const isInput = document.activeElement === inputRef.current;
+        const isInput = activeElementIn(eventRoot) === inputRef.current;
         if (!isInput || event.ctrlKey || event.metaKey) {
           event.preventDefault();
           if (selectedIndexRef.current !== 0) {
@@ -506,7 +509,7 @@ export function BookmarkManager({
           }
         }
       } else if (event.key === "End") {
-        const isInput = document.activeElement === inputRef.current;
+        const isInput = activeElementIn(eventRoot) === inputRef.current;
         if (!isInput || event.ctrlKey || event.metaKey) {
           event.preventDefault();
           const count = countRef.current;
@@ -519,7 +522,7 @@ export function BookmarkManager({
           }
         }
       } else if (event.key === "ArrowLeft") {
-        const isInput = document.activeElement === inputRef.current;
+        const isInput = activeElementIn(eventRoot) === inputRef.current;
         const atStart = inputRef.current
           ? inputRef.current.selectionStart === 0 && inputRef.current.selectionEnd === 0
           : true;
@@ -531,7 +534,7 @@ export function BookmarkManager({
         event.preventDefault();
         cycleFolderRef.current(event.shiftKey ? "prev" : "next");
       } else if (event.key === "ArrowRight") {
-        const isInput = document.activeElement === inputRef.current;
+        const isInput = activeElementIn(eventRoot) === inputRef.current;
         const atEnd = inputRef.current
           ? inputRef.current.selectionStart === queryRef.current.length &&
             inputRef.current.selectionEnd === queryRef.current.length
@@ -551,8 +554,8 @@ export function BookmarkManager({
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+    eventRoot.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => eventRoot.removeEventListener("keydown", handleKeyDown, { capture: true });
   });
 
   return (
