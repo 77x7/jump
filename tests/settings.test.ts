@@ -79,7 +79,7 @@ test("a pending popup read does not replace a newer user selection", () => {
 test("persisted settings validate fields independently", () => {
   assert.deepEqual(
     parseStoredSettings({ viewMode: "unsupported", theme: "nord", extra: "ignored" }),
-    { ...DEFAULT_SETTINGS, theme: "nord" },
+    { ...DEFAULT_SETTINGS, darkTheme: "nord" },
   );
   assert.deepEqual(
     parseStoredSettings({ viewMode: { value: "gallery" }, theme: "unknown" }),
@@ -115,11 +115,71 @@ test("color scheme selects the light or dark variant of a theme", () => {
   assert.equal(themeForScheme("rose-pine-moon", "light"), "rose-pine-dawn");
   assert.equal(themeForScheme("gruvbox-light", "dark"), "gruvbox-dark");
   assert.equal(themeForScheme("tokyo-night", "light"), "default");
-  assert.deepEqual(parseStoredSettings({ theme: "gruvbox-light" }).colorScheme, "light");
-  assert.deepEqual(
-    parseStoredSettings({ colorScheme: "light", theme: "catppuccin-macchiato" }),
-    { ...DEFAULT_SETTINGS, colorScheme: "light", theme: "catppuccin-latte" },
-  );
+});
+
+test("migrates the single stored theme into light and dark slots", () => {
+  // A dark preset fills the dark slot; its light counterpart fills the other.
+  assert.deepEqual(parseStoredSettings({ theme: "nord" }), {
+    ...DEFAULT_SETTINGS,
+    lightTheme: "default",
+    darkTheme: "nord",
+  });
+  assert.deepEqual(parseStoredSettings({ theme: "gruvbox-light" }), {
+    ...DEFAULT_SETTINGS,
+    lightTheme: "gruvbox-light",
+    darkTheme: "gruvbox-dark",
+    colorScheme: "light",
+  });
+  assert.deepEqual(parseStoredSettings({ theme: "catppuccin-mocha" }), {
+    ...DEFAULT_SETTINGS,
+    lightTheme: "catppuccin-latte",
+    darkTheme: "catppuccin-mocha",
+  });
+  // An old stored colorScheme wins over the one inferred from the theme.
+  assert.deepEqual(parseStoredSettings({ colorScheme: "light", theme: "catppuccin-macchiato" }), {
+    ...DEFAULT_SETTINGS,
+    colorScheme: "light",
+    lightTheme: "catppuccin-latte",
+    darkTheme: "catppuccin-macchiato",
+  });
+  // New-style slots are kept as-is, including custom ids.
+  assert.deepEqual(parseStoredSettings({ lightTheme: "custom-abc123", darkTheme: "vesper", colorScheme: "auto" }), {
+    ...DEFAULT_SETTINGS,
+    lightTheme: "custom-abc123",
+    darkTheme: "vesper",
+    colorScheme: "auto",
+  });
+  // Unknown slots fall back to the defaults.
+  assert.deepEqual(parseStoredSettings({ lightTheme: "nope", darkTheme: 42 }), DEFAULT_SETTINGS);
+  // An invalid legacy theme is ignored.
+  assert.deepEqual(parseStoredSettings({ theme: "unknown" }), DEFAULT_SETTINGS);
+});
+
+test("stored custom themes and overrides are validated", () => {
+  const custom = {
+    id: "custom-abc123",
+    name: "Ocean",
+    base: "nord" as const,
+    scheme: "dark" as const,
+    colors: { accent: "#22d3ee", text: "not-a-color", nope: "#ffffff" },
+  };
+  const parsed = parseStoredSettings({
+    darkTheme: "custom-abc123",
+    customThemes: [custom, { ...custom, id: "custom-abc123" }, { id: "bad", name: "x" }],
+    themeOverrides: {
+      "custom-abc123": { background: "#001122" },
+      "not-a-theme": { background: "#ffffff" },
+      nord: { accent: "blue" },
+    },
+  });
+  assert.deepEqual(parsed.customThemes, [{
+    id: "custom-abc123",
+    name: "Ocean",
+    base: "nord",
+    scheme: "dark",
+    colors: { accent: "#22d3ee" },
+  }]);
+  assert.deepEqual(parsed.themeOverrides, { "custom-abc123": { background: "#001122" } });
 });
 
 test("migrates legacy pinned tab IDs", () => {
@@ -153,10 +213,10 @@ test("overlapping saves preserve both partial updates", async () => {
   const settings = await import(`../src/settings.ts?concurrent=${Date.now()}`);
   await Promise.all([
     settings.saveStoredSettings({ viewMode: "gallery" }),
-    settings.saveStoredSettings({ theme: "nord" }),
+    settings.saveStoredSettings({ darkTheme: "nord" }),
   ]);
 
-  assert.deepEqual(stored, { ...DEFAULT_SETTINGS, viewMode: "gallery", theme: "nord" });
+  assert.deepEqual(stored, { ...DEFAULT_SETTINGS, viewMode: "gallery", darkTheme: "nord" });
   assert.equal(maximumActiveWrites, 1);
 });
 

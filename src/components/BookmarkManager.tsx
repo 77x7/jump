@@ -115,6 +115,7 @@ function BookmarkDetail({
 export function BookmarkManager({
   theme,
   colorScheme = "dark",
+  cssVars,
   surfaceAlpha = 1,
   surfaceBlur = 0,
   disableMouse = false,
@@ -124,6 +125,7 @@ export function BookmarkManager({
 }: {
   theme: ColorTheme;
   colorScheme?: ColorScheme;
+  cssVars?: Record<string, string>;
   surfaceAlpha?: number;
   surfaceBlur?: number;
   disableMouse?: boolean;
@@ -563,6 +565,7 @@ export function BookmarkManager({
       style={{
         "--surface-alpha": surfaceAlpha,
         "--surface-blur": `${surfaceBlur}px`,
+        ...cssVars,
       } as CSSProperties}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();

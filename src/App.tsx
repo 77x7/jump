@@ -7,6 +7,7 @@ import { buildSearchResults, type SearchResult } from "./paletteSearch";
 import { stalePreviewTabIds } from "./previewCache";
 import { getSearchHistory, recordSearch, type SearchHistoryEntry } from "./searchHistory";
 import { DEFAULT_SETTINGS, getStoredSettings, pinnedTabIdentity, saveStoredSettings, subscribeToSettings } from "./settings";
+import { useResolvedAppearance } from "./appearance";
 import { useMountEffect } from "./hooks/useMountEffect";
 import { TabFavicon, TabSoundIndicator } from "./components/TabVisuals";
 import { GalleryCard, SwitcherCard } from "./components/TabCards";
@@ -55,6 +56,7 @@ export function App({
   } | undefined>(undefined);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  const appearance = useResolvedAppearance(settings);
 
   const isSwitcher = mode === "switcher";
   const isBookmarks = mode === "bookmarks";
@@ -743,13 +745,15 @@ export function App({
   const surfaceStyle = {
     "--surface-alpha": settings.paletteOpacity,
     "--surface-blur": `${settings.paletteBlur}px`,
+    ...appearance.cssVars,
   } as CSSProperties;
 
   if (isBookmarks) {
     return (
       <BookmarkManager
-        theme={settings.theme}
-        colorScheme={settings.colorScheme}
+        theme={appearance.baseTheme}
+        colorScheme={appearance.scheme}
+        cssVars={appearance.cssVars}
         surfaceAlpha={settings.paletteOpacity}
         surfaceBlur={settings.paletteBlur}
         disableMouse={settings.disableMouseBookmarks}
@@ -765,8 +769,8 @@ export function App({
     return (
       <div
         className={`palette-backdrop switcher-backdrop ${isClosing ? "is-closing" : ""}`}
-        data-theme={settings.theme}
-        data-scheme={settings.colorScheme}
+        data-theme={appearance.baseTheme}
+        data-scheme={appearance.scheme}
         style={surfaceStyle}
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) handleClose();
@@ -805,8 +809,8 @@ export function App({
   return (
     <div
       className={`palette-backdrop ${isClosing ? "is-closing" : ""}`}
-      data-theme={settings.theme}
-      data-scheme={settings.colorScheme}
+      data-theme={appearance.baseTheme}
+      data-scheme={appearance.scheme}
       style={surfaceStyle}
       onMouseDown={(event) => {
         if (event.altKey) return;

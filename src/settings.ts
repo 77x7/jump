@@ -1,9 +1,16 @@
-import type { ColorScheme, ColorTheme, PalettePosition, PaletteViewMode, PinnedTab, TabSwitchMode, UserSettings, ViewMode } from "./types";
+import type { AppearanceScheme, ColorScheme, ColorTheme, CustomTheme, PalettePosition, PaletteViewMode, PinnedTab, TabSwitchMode, ThemeId, ThemeOverrides, UserSettings, ViewMode } from "./types";
+import { DARK_VARIANT, LIGHT_THEMES, LIGHT_VARIANT, isColorTheme, parseColorTheme } from "./themes.ts";
+import { isThemeId, parseCustomThemes, parseThemeOverrides } from "./themeLibrary.ts";
+
+export { THEMES, themeForScheme, themesForScheme, type ThemeInfo } from "./themes.ts";
 
 export const DEFAULT_SETTINGS: UserSettings = {
   viewMode: "list",
-  theme: "default",
+  lightTheme: "default",
+  darkTheme: "default",
   colorScheme: "dark",
+  themeOverrides: {},
+  customThemes: [],
   disableMouseTabSwitcher: false,
   disableMouseCommandPalette: false,
   disableMouseBookmarks: false,
@@ -14,122 +21,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   pinnedTabs: [],
   palettePosition: { x: 0.5, y: 0.28 },
 };
-
-export type ThemeInfo = {
-  id: ColorTheme;
-  name: string;
-  badge: string;
-  bg: string;
-  accent: string;
-  text: string;
-};
-
-export const THEMES: ThemeInfo[] = [
-  {
-    id: "default",
-    name: "Mono",
-    badge: "Adaptive",
-    bg: "#08080a",
-    accent: "#38bdf8",
-    text: "#ffffff",
-  },
-  {
-    id: "catppuccin-mocha",
-    name: "Catppuccin",
-    badge: "Mocha",
-    bg: "#1e1e2e",
-    accent: "#cba6f7",
-    text: "#cdd6f4",
-  },
-  {
-    id: "rose-pine-main",
-    name: "Rosé Pine",
-    badge: "Main",
-    bg: "#191724",
-    accent: "#ebbcba",
-    text: "#e0def4",
-  },
-  {
-    id: "catppuccin-latte",
-    name: "Catppuccin",
-    badge: "Latte",
-    bg: "#eff1f5",
-    accent: "#8839ef",
-    text: "#4c4f69",
-  },
-  {
-    id: "catppuccin-frappe",
-    name: "Catppuccin",
-    badge: "Frappé",
-    bg: "#303446",
-    accent: "#ca9ee6",
-    text: "#c6d0f5",
-  },
-  {
-    id: "catppuccin-macchiato",
-    name: "Catppuccin",
-    badge: "Macchiato",
-    bg: "#24273a",
-    accent: "#c6a0f6",
-    text: "#cad3f5",
-  },
-  {
-    id: "rose-pine-dawn",
-    name: "Rosé Pine",
-    badge: "Dawn",
-    bg: "#faf4ed",
-    accent: "#d7827e",
-    text: "#575279",
-  },
-  {
-    id: "rose-pine-moon",
-    name: "Rosé Pine",
-    badge: "Moon",
-    bg: "#232136",
-    accent: "#ea9a97",
-    text: "#e0def4",
-  },
-  {
-    id: "vesper",
-    name: "Vesper",
-    badge: "Peppermint",
-    bg: "#101010",
-    accent: "#ffc799",
-    text: "#ffffff",
-  },
-  {
-    id: "gruvbox-light",
-    name: "Gruvbox",
-    badge: "Light",
-    bg: "#fbf1c7",
-    accent: "#af3a03",
-    text: "#3c3836",
-  },
-  {
-    id: "tokyo-night",
-    name: "Tokyo Night",
-    badge: "Night",
-    bg: "#1a1b26",
-    accent: "#7aa2f7",
-    text: "#c0caf5",
-  },
-  {
-    id: "nord",
-    name: "Nord",
-    badge: "Arctic",
-    bg: "#2e3440",
-    accent: "#88c0d0",
-    text: "#eceff4",
-  },
-  {
-    id: "gruvbox-dark",
-    name: "Gruvbox",
-    badge: "Dark",
-    bg: "#282828",
-    accent: "#fe8019",
-    text: "#ebdbb2",
-  },
-];
 
 const LOCAL_SETTINGS_KEY = "jump_settings";
 type SettingsBackend = "sync" | "local" | "localStorage";
@@ -142,69 +33,45 @@ function isViewMode(value: unknown): value is ViewMode {
   return value === "list" || value === "gallery";
 }
 
-function isColorTheme(value: unknown): value is ColorTheme {
-  return value === "default" || value === "catppuccin-latte" || value === "catppuccin-frappe" ||
-    value === "catppuccin-macchiato" || value === "catppuccin-mocha" || value === "rose-pine-dawn" ||
-    value === "rose-pine-main" || value === "rose-pine-moon" || value === "tokyo-night" ||
-    value === "nord" || value === "vesper" || value === "gruvbox-dark" || value === "gruvbox-light";
+function isAppearanceScheme(value: unknown): value is AppearanceScheme {
+  return value === "light" || value === "dark" || value === "auto";
 }
 
-function parseColorTheme(value: unknown): ColorTheme {
-  if (isColorTheme(value)) return value;
-  if (value === "catppuccin") return "catppuccin-mocha";
-  if (value === "rose-pine") return "rose-pine-main";
-  if (value === "gruvbox") return "gruvbox-dark";
-  return DEFAULT_SETTINGS.theme;
-}
-
-const LIGHT_THEMES = new Set<ColorTheme>(["catppuccin-latte", "rose-pine-dawn", "gruvbox-light"]);
-
-const LIGHT_VARIANT: Record<ColorTheme, ColorTheme> = {
-  default: "default",
-  "catppuccin-mocha": "catppuccin-latte",
-  "catppuccin-frappe": "catppuccin-latte",
-  "catppuccin-macchiato": "catppuccin-latte",
-  "catppuccin-latte": "catppuccin-latte",
-  "rose-pine-main": "rose-pine-dawn",
-  "rose-pine-moon": "rose-pine-dawn",
-  "rose-pine-dawn": "rose-pine-dawn",
-  "gruvbox-dark": "gruvbox-light",
-  "gruvbox-light": "gruvbox-light",
-  "tokyo-night": "default",
-  nord: "default",
-  vesper: "default",
-};
-
-const DARK_VARIANT: Record<ColorTheme, ColorTheme> = {
-  default: "default",
-  "catppuccin-latte": "catppuccin-mocha",
-  "catppuccin-mocha": "catppuccin-mocha",
-  "catppuccin-frappe": "catppuccin-frappe",
-  "catppuccin-macchiato": "catppuccin-macchiato",
-  "rose-pine-dawn": "rose-pine-main",
-  "rose-pine-main": "rose-pine-main",
-  "rose-pine-moon": "rose-pine-moon",
-  "gruvbox-light": "gruvbox-dark",
-  "gruvbox-dark": "gruvbox-dark",
-  "tokyo-night": "tokyo-night",
-  nord: "nord",
-  vesper: "vesper",
-};
-
-export function themeForScheme(theme: ColorTheme, scheme: ColorScheme): ColorTheme {
-  return scheme === "light" ? LIGHT_VARIANT[theme] : DARK_VARIANT[theme];
-}
-
-export function themesForScheme(scheme: ColorScheme): ThemeInfo[] {
-  return THEMES.filter((theme) => theme.id === "default" || (scheme === "light" ? LIGHT_THEMES.has(theme.id) : !LIGHT_THEMES.has(theme.id)));
-}
-
-function isColorScheme(value: unknown): value is ColorScheme {
-  return value === "light" || value === "dark";
+/** Stored theme slots accept presets and saved custom themes. */
+function parseThemeId(value: unknown, fallback: ThemeId): ThemeId {
+  return isThemeId(value) ? value : fallback;
 }
 
 function inferredColorScheme(theme: ColorTheme): ColorScheme {
   return LIGHT_THEMES.has(theme) ? "light" : "dark";
+}
+
+type ThemeSlots = { lightTheme: ThemeId; darkTheme: ThemeId };
+
+/**
+ * Migration from the single `theme` setting: a light preset becomes the light
+ * slot (its dark counterpart fills the other), anything else becomes the dark
+ * slot (its light counterpart fills the other).
+ */
+function migrateThemeSlots(value: Record<string, unknown>): ThemeSlots {
+  const hasLight = "lightTheme" in value;
+  const hasDark = "darkTheme" in value;
+  if (hasLight || hasDark) {
+    return {
+      lightTheme: parseThemeId(value.lightTheme, DEFAULT_SETTINGS.lightTheme),
+      darkTheme: parseThemeId(value.darkTheme, DEFAULT_SETTINGS.darkTheme),
+    };
+  }
+  if (!("theme" in value)) {
+    return { lightTheme: DEFAULT_SETTINGS.lightTheme, darkTheme: DEFAULT_SETTINGS.darkTheme };
+  }
+  const stored = parseColorTheme(value.theme);
+  if (stored === "default" && value.theme !== "default") {
+    return { lightTheme: DEFAULT_SETTINGS.lightTheme, darkTheme: DEFAULT_SETTINGS.darkTheme };
+  }
+  return LIGHT_THEMES.has(stored)
+    ? { lightTheme: stored, darkTheme: DARK_VARIANT[stored] }
+    : { lightTheme: LIGHT_VARIANT[stored], darkTheme: stored };
 }
 
 function isTabSwitchMode(value: unknown): value is TabSwitchMode {
@@ -292,12 +159,20 @@ function parseLegacyPinnedTabs(value: unknown): PinnedTab[] {
 
 export function parseStoredSettings(value: unknown): UserSettings {
   if (typeof value !== "object" || value === null) return DEFAULT_SETTINGS;
+  const record = value as Record<string, unknown>;
   const viewMode = "viewMode" in value && isViewMode(value.viewMode) ? value.viewMode : DEFAULT_SETTINGS.viewMode;
-  const storedTheme = "theme" in value ? parseColorTheme(value.theme) : DEFAULT_SETTINGS.theme;
-  const colorScheme = "colorScheme" in value && isColorScheme(value.colorScheme)
+  const { lightTheme, darkTheme } = migrateThemeSlots(record);
+  const colorScheme = "colorScheme" in value && isAppearanceScheme(value.colorScheme)
     ? value.colorScheme
-    : inferredColorScheme(storedTheme);
-  const theme = themeForScheme(storedTheme, colorScheme);
+    : "theme" in value
+      ? inferredColorScheme(parseColorTheme(record.theme))
+      : DEFAULT_SETTINGS.colorScheme;
+  const themeOverrides: ThemeOverrides = "themeOverrides" in value
+    ? parseThemeOverrides(value.themeOverrides)
+    : DEFAULT_SETTINGS.themeOverrides;
+  const customThemes: CustomTheme[] = "customThemes" in value
+    ? parseCustomThemes(value.customThemes)
+    : DEFAULT_SETTINGS.customThemes;
   const disableMouseTabSwitcher = "disableMouseTabSwitcher" in value && isBoolean(value.disableMouseTabSwitcher)
     ? value.disableMouseTabSwitcher
     : DEFAULT_SETTINGS.disableMouseTabSwitcher;
@@ -325,15 +200,18 @@ export function parseStoredSettings(value: unknown): UserSettings {
       ? parseLegacyPinnedTabs(value.pinnedTabIds)
       : DEFAULT_SETTINGS.pinnedTabs;
   const palettePosition = "palettePosition" in value ? parsePalettePosition(value.palettePosition) : DEFAULT_SETTINGS.palettePosition;
-  return { viewMode, theme, colorScheme, disableMouseTabSwitcher, disableMouseCommandPalette, disableMouseBookmarks, tabSwitchMode, paletteViewMode, paletteOpacity, paletteBlur, pinnedTabs, palettePosition };
+  return { viewMode, lightTheme, darkTheme, colorScheme, themeOverrides, customThemes, disableMouseTabSwitcher, disableMouseCommandPalette, disableMouseBookmarks, tabSwitchMode, paletteViewMode, paletteOpacity, paletteBlur, pinnedTabs, palettePosition };
 }
 
 function parseSettingsUpdate(value: unknown): Partial<UserSettings> {
   if (typeof value !== "object" || value === null) return {};
   return {
     ...( "viewMode" in value && isViewMode(value.viewMode) ? { viewMode: value.viewMode } : {}),
-    ...( "theme" in value && isColorTheme(value.theme) ? { theme: value.theme } : {}),
-    ...( "colorScheme" in value && isColorScheme(value.colorScheme) ? { colorScheme: value.colorScheme } : {}),
+    ...( "lightTheme" in value && isThemeId(value.lightTheme) ? { lightTheme: value.lightTheme } : {}),
+    ...( "darkTheme" in value && isThemeId(value.darkTheme) ? { darkTheme: value.darkTheme } : {}),
+    ...( "colorScheme" in value && isAppearanceScheme(value.colorScheme) ? { colorScheme: value.colorScheme } : {}),
+    ...( "themeOverrides" in value ? { themeOverrides: parseThemeOverrides(value.themeOverrides) } : {}),
+    ...( "customThemes" in value ? { customThemes: parseCustomThemes(value.customThemes) } : {}),
     ...( "disableMouseTabSwitcher" in value && isBoolean(value.disableMouseTabSwitcher)
       ? { disableMouseTabSwitcher: value.disableMouseTabSwitcher }
       : {}),
@@ -393,7 +271,11 @@ async function readChromeLocalSettings() {
   const stored: unknown = await chrome.storage.local.get([
     "viewMode",
     "theme",
+    "lightTheme",
+    "darkTheme",
     "colorScheme",
+    "themeOverrides",
+    "customThemes",
     "disableMouseTabSwitcher",
     "disableMouseCommandPalette",
     "disableMouseBookmarks",
@@ -426,7 +308,11 @@ export async function getStoredSettings(): Promise<UserSettings> {
       const settings = parseStoredSettings(await chrome.storage.sync.get([
         "viewMode",
         "theme",
+        "lightTheme",
+        "darkTheme",
         "colorScheme",
+        "themeOverrides",
+        "customThemes",
         "disableMouseTabSwitcher",
         "disableMouseCommandPalette",
         "disableMouseBookmarks",
