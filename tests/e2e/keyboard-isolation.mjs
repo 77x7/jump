@@ -276,6 +276,23 @@ async function main() {
     );
     await palettePage.screenshot({ path: path.join(artifactDir, "02-search-arrowdown.png") });
 
+    // ------------------------------------------------------- focus stolen
+    // The page moves focus to its composer while the palette is open; the
+    // next keystrokes must still reach the palette input.
+    await palettePage.evaluate(() => document.getElementById("composer").focus());
+    await palettePage.keyboard.type("x", { delay: 30 });
+    const afterSteal = await waitFor(
+      "typing after focus steal",
+      async () => {
+        const value = await palette.call("function(){ return this.querySelector('.search-input').value; }");
+        return value === "githubx" ? "value=githubx" : undefined;
+      },
+      3000,
+    ).catch(() => undefined);
+    check("typing reaches the palette after the page steals focus", afterSteal !== undefined, afterSteal ?? "input did not receive x");
+    const stealState = await fixtureState(palettePage);
+    check("composer stays empty after the focus steal", stealState.composer === "", `composer=${JSON.stringify(stealState.composer)}`);
+
     // ----------------------------------------------------------------- Escape
     await palettePage.keyboard.press("Escape");
     await checkEventually(

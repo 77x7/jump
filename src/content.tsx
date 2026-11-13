@@ -8,6 +8,9 @@ let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 let shadowRoot: ShadowRoot | undefined;
 let mountPoint: HTMLDivElement | undefined;
+// Last element that held focus inside the palette, so focus can be pulled back
+// when the page steals it while the palette is open.
+let lastPaletteFocus: HTMLElement | undefined;
 
 const CLIPBOARD_EVENT_TYPES = new Set(["paste", "copy", "cut"]);
 const KEY_EVENT_TYPES = new Set(["keydown", "keyup", "keypress"]);
@@ -93,8 +96,23 @@ function handlePageEvent(event: Event) {
   event.stopImmediatePropagation();
 
   if (!fromPalette) {
-    // Page focus lingered (switcher mode, or focus not yet moved). Keep the page
-    // from acting on the key and deliver it to the palette instead.
+    // The page holds focus (it stole it, or focus has not moved in yet). Pull
+    // focus back to the palette element that last had it and deliver the key
+    // there; moving focus during keydown also sends the typed character to it.
+    const refocus = lastPaletteFocus?.isConnected ? lastPaletteFocus : undefined;
+    if (refocus) {
+      refocus.focus({ preventScroll: true });
+      if (shadowRoot.activeElement === refocus) {
+        const forwarded = cloneForwardedEvent(event);
+        if (forwarded) {
+          refocus.dispatchEvent(forwarded);
+          if (forwarded.defaultPrevented) event.preventDefault();
+        }
+        return;
+      }
+    }
+    // Nothing to refocus: keep the page from acting on the key and deliver it
+    // to the palette root instead.
     event.preventDefault();
     const forwarded = cloneForwardedEvent(event);
     if (forwarded) mountPoint.dispatchEvent(forwarded);
@@ -136,6 +154,7 @@ function closePalette() {
   host = undefined;
   shadowRoot = undefined;
   mountPoint = undefined;
+  lastPaletteFocus = undefined;
 }
 
 function openPalette(message: Extract<BrowserMessage, { type: "open-palette" }> = { type: "open-palette" }) {
@@ -153,6 +172,9 @@ function openPalette(message: Extract<BrowserMessage, { type: "open-palette" }> 
   shadow.append(style);
   const point = document.createElement("div");
   shadow.append(point);
+  shadow.addEventListener("focusin", (focusEvent) => {
+    if (focusEvent.target instanceof HTMLElement) lastPaletteFocus = focusEvent.target;
+  });
 
   host = hostElement;
   shadowRoot = shadow;
