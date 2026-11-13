@@ -2118,16 +2118,6 @@ kbd {
   color: var(--text-primary);
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  .palette-card,
-  .bookmark-card,
-  .switcher-hud {
-    background-color: var(--bg-panel);
-    background-image: none;
-    backdrop-filter: none;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .palette-backdrop,
   .switcher-hud,
