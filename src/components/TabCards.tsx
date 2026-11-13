@@ -12,9 +12,33 @@ type CardProps = {
   onClick?: () => void;
   onMouseEnter?: () => void;
   onToggleMute?: () => void;
+  /** Middle click: close the tab. */
+  onCloseTab?: () => void;
 };
 
-export function SwitcherCard({ tab, isSelected, previewUrl, index, setSize, onClick, onMouseEnter, onToggleMute }: CardProps) {
+/**
+ * Middle click closes a tab, as on Chrome's own tab strip. Its mouse down and
+ * mouse up are cancelled too: the down would start autoscroll, and on Linux
+ * the up pastes the selected text into the focused search box.
+ */
+export function middleClickProps(onMiddleClick?: () => void) {
+  if (!onMiddleClick) return {};
+  const cancelMiddle = (event: { button: number; preventDefault(): void }) => {
+    if (event.button === 1) event.preventDefault();
+  };
+  return {
+    onMouseDown: cancelMiddle,
+    onMouseUp: cancelMiddle,
+    onAuxClick: (event: { button: number; preventDefault(): void; stopPropagation(): void }) => {
+      if (event.button !== 1) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onMiddleClick();
+    },
+  };
+}
+
+export function SwitcherCard({ tab, isSelected, previewUrl, index, setSize, onClick, onMouseEnter, onToggleMute, onCloseTab }: CardProps) {
   const effectivePreview = previewUrl;
   return (
     <div
@@ -22,6 +46,7 @@ export function SwitcherCard({ tab, isSelected, previewUrl, index, setSize, onCl
       className={`switcher-card ${isSelected ? "is-selected" : ""}`}
       onClick={onClick}
       onMouseEnter={onMouseEnter}
+      {...middleClickProps(onCloseTab)}
       role="option"
       aria-selected={isSelected}
       aria-setsize={setSize}
@@ -47,10 +72,10 @@ export function SwitcherCard({ tab, isSelected, previewUrl, index, setSize, onCl
   );
 }
 
-export function GalleryCard({ tab, index, isSelected, previewUrl, onClick, onMouseEnter, onToggleMute }: CardProps) {
+export function GalleryCard({ tab, index, isSelected, previewUrl, onClick, onMouseEnter, onToggleMute, onCloseTab }: CardProps) {
   const effectivePreview = previewUrl;
   return (
-    <div data-index={index} className={`gallery-card ${isSelected ? "selected" : ""}`} onClick={onClick} onMouseEnter={onMouseEnter} role="option" aria-selected={isSelected}>
+    <div data-index={index} className={`gallery-card ${isSelected ? "selected" : ""}`} onClick={onClick} onMouseEnter={onMouseEnter} {...middleClickProps(onCloseTab)} role="option" aria-selected={isSelected}>
       <div className="gallery-thumbnail">
         {effectivePreview ? <img src={effectivePreview} alt="" className="gallery-thumbnail-image" loading="eager" decoding="async" /> : (
           <div className="gallery-placeholder">
