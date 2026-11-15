@@ -80,7 +80,7 @@ export function Popup() {
   const movePaletteShortcut = isMac ? "⌥ + drag" : "Alt + drag";
   const version = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version
     ? chrome.runtime.getManifest().version
-    : "0.1.7";
+    : "0.2.0";
 
   const appearance = useResolvedAppearance(settings);
   const activeCustom = isCustomThemeId(appearance.themeId)
